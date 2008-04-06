@@ -264,7 +264,7 @@ class DefaultCompiler(engine.Compiled):
                 schema_prefix = self.preparer.quote(column.table, column.table.schema) + '.'
             else:
                 schema_prefix = ''
-            return schema_prefix + self.preparer.quote(column.table, ANONYMOUS_LABEL.sub(self.process_anon, column.table.name)) + "." + name
+            return schema_prefix + self.preparer.quote(column.table, ANONYMOUS_LABEL.sub(self.preparer.process_anon, column.table.name)) + "." + name
 
     def escape_literal_column(self, text):
         """provide escaping for the literal_column() construct."""
@@ -472,8 +472,8 @@ class DefaultCompiler(engine.Compiled):
         inner_columns = util.OrderedSet(
             [c for c in [
                 self.process(
-                    self.label_select_column(select, co, asfrom=asfrom), 
-                    **column_clause_args) 
+                    self.label_select_column(select, co, asfrom=asfrom),
+                    **column_clause_args)
                 for co in select.inner_columns
             ]
             if c is not None]
@@ -807,7 +807,7 @@ class SchemaGenerator(DDLBase):
         if constraint.name is not None:
             self.append("CONSTRAINT %s " % self.preparer.format_constraint(constraint))
         self.append("PRIMARY KEY ")
-        self.append("(%s)" % ', '.join([self.preparer.quote(c, c.name) for c in constraint]))
+        self.append("(%s)" % ', '.join([self.preparer.format_column(c) for c in constraint]))
         self.define_constraint_deferrability(constraint)
 
     def visit_foreign_key_constraint(self, constraint):
@@ -866,7 +866,7 @@ class SchemaGenerator(DDLBase):
         self.append("INDEX %s ON %s (%s)" \
                     % (preparer.format_index(index),
                        preparer.format_table(index.table),
-                       string.join([preparer.quote(c, c.name) for c in index.columns], ', ')))
+                       string.join([preparer.format_column(c) for c in index.columns], ', ')))
         self.execute()
 
 
