@@ -264,7 +264,7 @@ class DefaultCompiler(engine.Compiled):
                 schema_prefix = self.preparer.quote(column.table, column.table.schema) + '.'
             else:
                 schema_prefix = ''
-            return schema_prefix + self.preparer.quote(column.table, ANONYMOUS_LABEL.sub(self.preparer.process_anon, column.table.name)) + "." + name
+            return schema_prefix + self.preparer.truncated_identifier(column.table, ANONYMOUS_LABEL.sub(self.preparer.process_anon, column.table.name)) + "." + name
 
     def escape_literal_column(self, text):
         """provide escaping for the literal_column() construct."""
@@ -573,7 +573,7 @@ class DefaultCompiler(engine.Compiled):
 
         return (insert + " INTO %s (%s) VALUES (%s)" %
                 (preparer.format_table(insert_stmt.table),
-                 ', '.join([preparer.quote(c[0], c[0].name)
+                 ', '.join([preparer.truncated_identifier('colident', c[0].name)
                             for c in colparams]),
                  ', '.join([c[1] for c in colparams])))
 
@@ -953,16 +953,26 @@ class IdentifierPreparer(object):
         if (   len(anonname) > self.dialect.max_identifier_length
             or (   self.dialect.reserved_words_are_reserved_for_eternity
                 and anonname in self.reserved_words)):
-            counter = self.generated_ids.get(ident_class, 1)
+
+            # Simple checksum for id in the middle
+            anon_len = len(anonname)
+            counter_len = 6 # 4 characters for the hex checksum, plus one _ on either side
+            checksum = sum(ord(c) for c in anonname)
+
             # This is just an attempt to get sort of readable names in the DB
-            counter_len = 10 # 8 characters for the hex counter, plus one _ on either side
-            prefix_len = (self.dialect.max_identifier_length - counter_len) / 2
-            postfix_len = self.dialect.max_identifier_length - counter_len - prefix_len
-            truncname = anonname[0:prefix_len] + "_" + hex(counter)[2:] + "_" + anonname[len(anonname) - postfix_len:]
-            self.generated_ids[ident_class] = counter + 1
+            if anon_len < counter_len:
+                prefix_len = self.dialect.max_identifier_length / 2
+                postfix_len = anon_len - prefix_len
+            else:
+                prefix_len = (self.dialect.max_identifier_length - counter_len) / 2
+                postfix_len = self.dialect.max_identifier_length - counter_len - prefix_len
+
+            truncname = anonname[0:prefix_len] + "_" + hex(checksum)[2:6] + "_" + anonname[anon_len - postfix_len:]
         else:
             truncname = anonname
+
         self.generated_ids[(ident_class, name)] = truncname
+
         return truncname
 
     def process_anon(self, match):
