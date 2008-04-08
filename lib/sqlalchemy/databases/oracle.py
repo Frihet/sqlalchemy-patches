@@ -419,11 +419,11 @@ class OracleDialect(default.DefaultDialect):
 
         if desired_owner is None, attempts to locate a distinct owner.
 
-	returns the actual name, owner, dblink name, and synonym name if found.
+        returns the actual name, owner, dblink name, and synonym name if found.
         """
 
-	sql = """select OWNER, TABLE_OWNER, TABLE_NAME, DB_LINK, SYNONYM_NAME
-		   from   ALL_SYNONYMS WHERE """
+        sql = """select OWNER, TABLE_OWNER, TABLE_NAME, DB_LINK, SYNONYM_NAME
+                   from   ALL_SYNONYMS WHERE """
 
         clauses = []
         params = {}
@@ -437,9 +437,9 @@ class OracleDialect(default.DefaultDialect):
             clauses.append("TABLE_NAME=:tname")
             params['tname'] = desired_table
 
-        sql += " AND ".join(clauses) 
+        sql += " AND ".join(clauses)
 
-	result = connection.execute(sql, **params)
+        result = connection.execute(sql, **params)
         if desired_owner:
             row = result.fetchone()
             if row:
@@ -461,7 +461,7 @@ class OracleDialect(default.DefaultDialect):
 
         resolve_synonyms = table.kwargs.get('oracle_resolve_synonyms', False)
 
-	if resolve_synonyms:
+        if resolve_synonyms:
             actual_name, owner, dblink, synonym = self._resolve_synonym(connection, desired_owner=self._denormalize_name(table.schema), desired_synonym=self._denormalize_name(table.name))
         else:
             actual_name, owner, dblink, synonym = None, None, None, None
@@ -570,7 +570,7 @@ class OracleDialect(default.DefaultDialect):
                         remote_owner = self._normalize_name(ref_remote_owner)
 
                 if not table.schema and self._denormalize_name(remote_owner) == owner:
-                    refspec =  ".".join([remote_table, remote_column])               
+                    refspec =  ".".join([remote_table, remote_column])
                     t = schema.Table(remote_table, table.metadata, autoload=True, autoload_with=connection, oracle_resolve_synonyms=resolve_synonyms, useexisting=True)
                 else:
                     refspec =  ".".join([x for x in [remote_owner, remote_table, remote_column] if x])
@@ -593,7 +593,7 @@ class _OuterJoinColumn(sql.ClauseElement):
         self.column = column
     def _get_from_objects(self, **kwargs):
         return []
-    
+
 class OracleCompiler(compiler.DefaultCompiler):
     """Oracle compiler modifies the lexical structure of Select
     statements to work under non-ANSI configured Oracle databases, if
@@ -634,10 +634,10 @@ class OracleCompiler(compiler.DefaultCompiler):
             return compiler.DefaultCompiler.visit_join(self, join, **kwargs)
         else:
             return self.process(join.left, asfrom=True) + ", " + self.process(join.right, asfrom=True)
-    
+
     def _get_nonansi_join_whereclause(self, froms):
         clauses = []
-        
+
         def visit_join(join):
             if join.isouter:
                 def visit_binary(binary):
@@ -649,11 +649,11 @@ class OracleCompiler(compiler.DefaultCompiler):
                 clauses.append(visitors.traverse(join.onclause, visit_binary=visit_binary, clone=True))
             else:
                 clauses.append(join.onclause)
-        
+
         for f in froms:
             visitors.traverse(f, visit_join=visit_join)
         return sql.and_(*clauses)
-        
+
     def visit_outer_join_column(self, vc):
         return self.process(vc.column) + "(+)"
 
@@ -689,7 +689,7 @@ class OracleCompiler(compiler.DefaultCompiler):
                 if whereclause:
                     select = select.where(whereclause)
                     select._oracle_visit = True
-                
+
             if select._limit is not None or select._offset is not None:
                 # to use ROW_NUMBER(), an ORDER BY is required.
                 orderby = self.process(select._order_by_clause)
@@ -699,11 +699,11 @@ class OracleCompiler(compiler.DefaultCompiler):
 
                 select = select.column(sql.literal_column("ROW_NUMBER() OVER (ORDER BY %s)" % orderby).label("ora_rn")).order_by(None)
                 select._oracle_visit = True
-                
+
                 limitselect = sql.select([c for c in select.c if c.key!='ora_rn'])
                 limitselect._oracle_visit = True
                 limitselect._is_wrapper = True
-                
+
                 if select._offset is not None:
                     limitselect.append_whereclause("ora_rn>%d" % select._offset)
                     if select._limit is not None:
@@ -711,7 +711,7 @@ class OracleCompiler(compiler.DefaultCompiler):
                 else:
                     limitselect.append_whereclause("ora_rn<=%d" % select._limit)
                 select = limitselect
-        
+
         kwargs['iswrapper'] = getattr(select, '_is_wrapper', False)
         return compiler.DefaultCompiler.visit_select(self, select, **kwargs)
 
