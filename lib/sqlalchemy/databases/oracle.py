@@ -758,6 +758,15 @@ class OracleIdentifierPreparer(compiler.IdentifierPreparer):
         name = re.sub(r'^_+', '', savepoint.ident)
         return super(OracleIdentifierPreparer, self).format_savepoint(savepoint, name)
 
+    def quote_identifier(self, value):
+        # Oracle reserved words are not quotable so instead use the
+        # truncate algorithm to handle them properly as names.
+        if value in self.reserved_words:
+            return self._truncate_identifier("colident", value, value)
+        else:
+            if len(value) > OracleDialect.max_identifier_length:
+                value = self._escape_identifier(self._truncate_identifier("colident", value, value))
+            return self.initial_quote + self._escape_identifier(value) + self.final_quote
 
 dialect = OracleDialect
 dialect.statement_compiler = OracleCompiler

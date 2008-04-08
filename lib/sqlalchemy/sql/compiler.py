@@ -949,27 +949,34 @@ class IdentifierPreparer(object):
             return self.generated_ids[(ident_class, name)]
 
         anonname = ANONYMOUS_LABEL.sub(self.process_anon, name)
-
         if (   len(anonname) > self.dialect.max_identifier_length
             or (   self.dialect.reserved_words_are_reserved_for_eternity
                 and anonname in self.reserved_words)):
 
-            # Simple checksum for id in the middle
-            anon_len = len(anonname)
-            counter_len = 6 # 4 characters for the hex checksum, plus one _ on either side
-            checksum = sum(ord(c) for c in anonname)
-
-            # This is just an attempt to get sort of readable names in the DB
-            if anon_len < counter_len:
-                prefix_len = self.dialect.max_identifier_length / 2
-                postfix_len = anon_len - prefix_len
-            else:
-                prefix_len = (self.dialect.max_identifier_length - counter_len) / 2
-                postfix_len = self.dialect.max_identifier_length - counter_len - prefix_len
-
-            truncname = anonname[0:prefix_len] + "_" + hex(checksum)[2:6] + "_" + anonname[anon_len - postfix_len:]
+            truncname = self._truncate_identifier(ident_class, name, anonname)
         else:
             truncname = anonname
+
+        return truncname
+
+    def _truncate_identifier(self, ident_class, name, anonname):
+        if (ident_class, name) in self.generated_ids:
+            return self.generated_ids[(ident_class, name)]
+
+        # Simple checksum for id in the middle
+        anon_len = len(anonname)
+        counter_len = 6 # 4 characters for the hex checksum, plus one _ on either side
+        checksum = sum(ord(c) for c in anonname)
+
+        # This is just an attempt to get sort of readable names in the DB
+        if anon_len < counter_len:
+            prefix_len = self.dialect.max_identifier_length / 2
+            postfix_len = anon_len - prefix_len
+        else:
+            prefix_len = (self.dialect.max_identifier_length - counter_len) / 2
+            postfix_len = self.dialect.max_identifier_length - counter_len - prefix_len
+
+        truncname = anonname[0:prefix_len] + "_" + hex(checksum)[2:6] + "_" + anonname[anon_len - postfix_len:]
 
         self.generated_ids[(ident_class, name)] = truncname
 
