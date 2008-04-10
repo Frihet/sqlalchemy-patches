@@ -761,8 +761,9 @@ class OracleIdentifierPreparer(compiler.IdentifierPreparer):
     def quote_identifier(self, value):
         # Oracle reserved words are not quotable so instead use the
         # truncate algorithm to handle them properly as names.
+
         if value in self.reserved_words:
-            return self._truncate_identifier("colident", value, value)
+            return value
         else:
             if len(value) > OracleDialect.max_identifier_length:
                 value = self._escape_identifier(self._truncate_identifier("colident", value, value))
