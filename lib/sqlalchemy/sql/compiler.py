@@ -1054,7 +1054,8 @@ class IdentifierPreparer(object):
         return self.quote(label, name or label.name)
 
     def format_alias(self, alias, name=None):
-        return self.quote(alias, name or alias.name)
+        name = self.truncated_identifier("tblident", name or alias.name)
+        return self.quote(alias, name)
 
     def format_savepoint(self, savepoint, name=None):
         return self.quote(savepoint, name or savepoint.ident)
