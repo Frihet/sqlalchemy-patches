@@ -376,11 +376,11 @@ class OracleDialect(default.DefaultDialect):
         return OracleExecutionContext(self, *args, **kwargs)
 
     def has_table(self, connection, table_name, schema=None):
-        cursor = connection.execute("""select table_name from all_tables where table_name=:name""", {'name':self._denormalize_name(table_name)})
+        cursor = connection.execute("""select table_name from user_tables where table_name=:name""", {'name':self._denormalize_name(table_name)})
         return bool( cursor.fetchone() is not None )
 
     def has_sequence(self, connection, sequence_name):
-        cursor = connection.execute("""select sequence_name from all_sequences where sequence_name=:name""", {'name':self._denormalize_name(sequence_name)})
+        cursor = connection.execute("""select sequence_name from user_sequences where sequence_name=:name""", {'name':self._denormalize_name(sequence_name)})
         return bool( cursor.fetchone() is not None )
 
     def _normalize_name(self, name):
@@ -407,10 +407,10 @@ class OracleDialect(default.DefaultDialect):
     def table_names(self, connection, schema):
         # note that table_names() isnt loading DBLINKed or synonym'ed tables
         if schema is None:
-            s = "select table_name from all_tables where tablespace_name NOT IN ('SYSTEM', 'SYSAUX')"
+            s = "select table_name from user_tables where tablespace_name NOT IN ('SYSTEM', 'SYSAUX')"
             cursor = connection.execute(s)
         else:
-            s = "select table_name from all_tables where tablespace_name NOT IN ('SYSTEM','SYSAUX') AND OWNER = :owner"
+            s = "select table_name from user_tables where tablespace_name NOT IN ('SYSTEM','SYSAUX') AND OWNER = :owner"
             cursor = connection.execute(s,{'owner':self._denormalize_name(schema)})
         return [self._normalize_name(row[0]) for row in cursor]
 
@@ -423,7 +423,7 @@ class OracleDialect(default.DefaultDialect):
         """
 
         sql = """select OWNER, TABLE_OWNER, TABLE_NAME, DB_LINK, SYNONYM_NAME
-                   from   ALL_SYNONYMS WHERE """
+                   from   USER_SYNONYMS WHERE """
 
         clauses = []
         params = {}
@@ -473,7 +473,7 @@ class OracleDialect(default.DefaultDialect):
         if not owner:
             owner = self._denormalize_name(table.schema) or self.get_default_schema_name(connection)
 
-        c = connection.execute ("select COLUMN_NAME, DATA_TYPE, DATA_LENGTH, DATA_PRECISION, DATA_SCALE, NULLABLE, DATA_DEFAULT from ALL_TAB_COLUMNS%(dblink)s where TABLE_NAME = :table_name and OWNER = :owner" % {'dblink':dblink}, {'table_name':actual_name, 'owner':owner})
+        c = connection.execute ("select COLUMN_NAME, DATA_TYPE, DATA_LENGTH, DATA_PRECISION, DATA_SCALE, NULLABLE, DATA_DEFAULT from USER_TAB_COLUMNS%(dblink)s where TABLE_NAME = :table_name and OWNER = :owner" % {'dblink':dblink}, {'table_name':actual_name, 'owner':owner})
 
         while True:
             row = c.fetchone()
@@ -526,9 +526,9 @@ class OracleDialect(default.DefaultDialect):
              rem.table_name AS remote_table,
              rem.column_name AS remote_column,
              rem.owner AS remote_owner
-           FROM all_constraints%(dblink)s ac,
-             all_cons_columns%(dblink)s loc,
-             all_cons_columns%(dblink)s rem
+           FROM user_constraints%(dblink)s ac,
+             user_cons_columns%(dblink)s loc,
+             user_cons_columns%(dblink)s rem
            WHERE ac.table_name = :table_name
            AND ac.constraint_type IN ('R','P')
            AND ac.owner = :owner
@@ -559,7 +559,7 @@ class OracleDialect(default.DefaultDialect):
                     # ticket 363
                     util.warn(
                         ("Got 'None' querying 'table_name' from "
-                         "all_cons_columns%(dblink)s - does the user have "
+                         "user_cons_columns%(dblink)s - does the user have "
                          "proper rights to the table?") % {'dblink':dblink})
                     continue
 
