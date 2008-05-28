@@ -5,11 +5,11 @@
 # the MIT License: http://www.opensource.org/licenses/mit-license.php
 
 
-import datetime, random, re
+import datetime, random, re, operator
 
 from sqlalchemy import util, sql, schema, exceptions, logging
 from sqlalchemy.engine import default, base
-from sqlalchemy.sql import compiler, visitors
+from sqlalchemy.sql import compiler, visitors, expression
 from sqlalchemy.sql import operators as sql_operators, functions as sql_functions
 from sqlalchemy import types as sqltypes
 
@@ -214,6 +214,23 @@ def descriptor():
         ('user', 'Username', None),
         ('password', 'Password', None)
     ]}
+
+# Functions for compatibility
+
+class OracleFunction(sql_functions.GenericFunction):
+    def __init__(self, *args, **kwargs):
+        sql_functions.GenericFunction.__init__(self, *args, **kwargs)
+        self.packagenames.append('sqlalchemy')
+
+class is_equal(OracleFunction):
+    __return_type__ = sqltypes.Integer
+    def __init__(self, *args, **kwargs):
+        OracleFunction.__init__(self, args=args, **kwargs)
+
+class is_not_equal(OracleFunction):
+    __return_type__ = sqltypes.Integer
+    def __init__(self, *args, **kwargs):
+        OracleFunction.__init__(self, args=args, **kwargs)
 
 class OracleExecutionContext(default.DefaultExecutionContext):
     def pre_exec(self):
@@ -676,6 +693,24 @@ class OracleCompiler(compiler.DefaultCompiler):
         """Look for ``LIMIT`` and OFFSET in a select statement, and if
         so tries to wrap it in a subquery with ``row_number()`` criterion.
         """
+        # Replace all boolean expressions with is_equal and is_not_equal methods
+        raw_columns = []
+        for col in select._raw_columns:
+            # Oracle does not have a boolean type so does not support
+            # selecting boolean statements. Here = and != is replaced.
+            if hasattr(col, 'type') and hasattr(col, 'operator'):
+                if isinstance(col.type, sqltypes.Boolean):
+
+                    if col.operator == operator.eq:
+                        col = is_equal(col.left, col.right)
+                    elif col.operator == operator.ne:
+                        col = is_not_equal(col.left, col.right)
+                    else:
+                        raise NotImplementedError('Unsupported boolean operator %s in SELECT' % (col.operator, ))
+
+            raw_columns.append(col)
+
+        select._raw_columns = raw_columns
 
         if not getattr(select, '_oracle_visit', None):
             if not self.dialect.use_ansi:
