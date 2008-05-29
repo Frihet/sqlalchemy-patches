@@ -689,29 +689,42 @@ class OracleCompiler(compiler.DefaultCompiler):
         """Need to determine how to get ``LIMIT``/``OFFSET`` into a ``UNION`` for Oracle."""
         pass
 
+    boolean_plsqlnames = {operator.and_: 'sqlalchemy.is_and',
+                          operator.or_: 'sqlalchemy.is_or',
+                          operator.eq: 'sqlalchemy.is_equal',
+                          operator.ne: 'sqlalchemy.is_not_equal'}
+    
+#     def visit_unary(self, unary, **kwargs):
+#         return compiler.DefaultCompiler.visit_unary(self, unary, **kwargs)
+
+    def visit_binary(self, binary, **kwargs):
+        what = binary.operator
+        if what in self.boolean_plsqlnames:
+              return "%s(%s, %s)"  % (self.boolean_plsqlnames[what],
+                                      self.process(binary.left, **kwargs),
+                                      self.process(binary.right, **kwargs))
+        else:
+            return compiler.DefaultCompiler.visit_binary(self, binary, **kwargs)
+
+    def visit_clauselist(self, clauselist, **kwargs):
+        what = getattr(clauselist, 'operator', None)
+        what = what or clauselist.clauses and getattr(clauselist.clauses[0], 'text', None)
+
+        if what == 'WHEN':
+            return "when %s != 0 then %s"  % (
+                self.process(clauselist.clauses[1], **kwargs),
+                self.process(clauselist.clauses[3], **kwargs))
+        elif what in self.boolean_plsqlnames:
+            return "%s(%s)"  % (self.boolean_plsqlnames[what],
+                                ', '.join([self.process(subclause, **kwargs)
+                                           for subclause in clauselist.clauses]))
+        else:
+            return compiler.DefaultCompiler.visit_clauselist(self, clauselist, **kwargs)
+
     def visit_select(self, select, **kwargs):
         """Look for ``LIMIT`` and OFFSET in a select statement, and if
         so tries to wrap it in a subquery with ``row_number()`` criterion.
         """
-        # Replace all boolean expressions with is_equal and is_not_equal methods
-        raw_columns = []
-        for col in select._raw_columns:
-            # Oracle does not have a boolean type so does not support
-            # selecting boolean statements. Here = and != is replaced.
-            if hasattr(col, 'type') and hasattr(col, 'operator'):
-                if isinstance(col.type, sqltypes.Boolean):
-
-                    if col.operator == operator.eq:
-                        col = is_equal(col.left, col.right)
-                    elif col.operator == operator.ne:
-                        col = is_not_equal(col.left, col.right)
-                    else:
-                        raise NotImplementedError('Unsupported boolean operator %s in SELECT' % (col.operator, ))
-
-            raw_columns.append(col)
-
-        select._raw_columns = raw_columns
-
         if not getattr(select, '_oracle_visit', None):
             if not self.dialect.use_ansi:
                 if self.stack and 'from' in self.stack[-1]:
@@ -759,6 +772,11 @@ class OracleCompiler(compiler.DefaultCompiler):
         else:
             return super(OracleCompiler, self).for_update_clause(select)
 
+    def get_select_where(self, select):
+        where = compiler.DefaultCompiler.get_select_where(self, select)
+        if where:
+            return where + ' = 1'
+        return ''
 
 class OracleSchemaGenerator(compiler.SchemaGenerator):
     def get_column_specification(self, column, **kwargs):

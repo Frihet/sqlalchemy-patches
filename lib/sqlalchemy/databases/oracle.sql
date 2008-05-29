@@ -1,5 +1,11 @@
 create or replace package sqlalchemy
 is
+        function is_and(left number, right number)
+                return number deterministic;
+
+        function is_or(left number, right number)
+                return number deterministic;
+
         function is_equal(left char, right char)
                 return number deterministic;
 
@@ -11,6 +17,7 @@ is
 
         function is_not_equal(left number, right number)
                 return number deterministic;
+
 end sqlalchemy;
 /
 
@@ -20,6 +27,20 @@ end sqlalchemy;
  */
 create or replace package body sqlalchemy
 is
+        function is_and(left number, right number)
+                return number deterministic
+        is
+        begin
+                return left * right;
+        end;
+
+        function is_or(left number, right number)
+                return number deterministic
+        is
+        begin
+                return left + right;
+        end;
+
         function is_equal(left char, right char)
                 return number deterministic
         is
@@ -63,5 +84,8 @@ is
 
                 return 0;
         end;
+
 end sqlalchemy;
 /
+
+show errors;

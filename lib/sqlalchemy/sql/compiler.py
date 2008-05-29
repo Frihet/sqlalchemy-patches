@@ -493,19 +493,9 @@ class DefaultCompiler(engine.Compiled):
         else:
             text += self.default_from()
 
-        if select._whereclause is not None:
-            t = self.process(select._whereclause)
-            if t:
-                text += " \nWHERE " + t
-
-        group_by = self.process(select._group_by_clause)
-        if group_by:
-            text += " GROUP BY " + group_by
-
-        if select._having is not None:
-            t = self.process(select._having)
-            if t:
-                text += " \nHAVING " + t
+        text += self.get_select_where(select)
+        text += self.get_select_group_by(select)
+        text += self.get_select_having(select)
 
         text += self.order_by_clause(select)
         text += (select._limit or select._offset) and self.limit_clause(select) or ""
@@ -517,6 +507,26 @@ class DefaultCompiler(engine.Compiled):
             return "(" + text + ")"
         else:
             return text
+
+    def get_select_where(self, select):
+        if select._whereclause is not None:
+            t = self.process(select._whereclause)
+            if t:
+                return " \nWHERE " + t
+        return ''
+
+    def get_select_group_by(self, select):
+        group_by = self.process(select._group_by_clause)
+        if group_by:
+            return " GROUP BY " + group_by
+        return ''
+
+    def get_select_having(self, select):
+        if select._having is not None:
+            t = self.process(select._having)
+            if t:
+                return " \nHAVING " + t
+        return ''
 
     def get_select_precolumns(self, select):
         """Called when building a ``SELECT`` statement, position is just before column list."""
