@@ -27,6 +27,18 @@ end sqlalchemy;
  */
 create or replace package body sqlalchemy
 is
+        function is_not(operand number)
+                return number deterministic
+        is
+        begin
+                if operand != 0 then
+                        return 0;
+                else
+                        return 1;
+                end if;
+                return 1 - operand;
+        end;
+
         function is_and(left number, right number)
                 return number deterministic
         is

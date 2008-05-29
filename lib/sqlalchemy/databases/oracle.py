@@ -689,7 +689,8 @@ class OracleCompiler(compiler.DefaultCompiler):
         """Need to determine how to get ``LIMIT``/``OFFSET`` into a ``UNION`` for Oracle."""
         pass
 
-    boolean_plsqlnames = {operator.and_: 'sqlalchemy.is_and',
+    boolean_plsqlnames = {operator.not_: 'sqlalchemy.is_not',
+                          operator.and_: 'sqlalchemy.is_and',
                           operator.or_: 'sqlalchemy.is_or',
                           operator.eq: 'sqlalchemy.is_equal',
                           operator.ne: 'sqlalchemy.is_not_equal'}
@@ -703,6 +704,33 @@ class OracleCompiler(compiler.DefaultCompiler):
               return "%s(%s, %s)"  % (self.boolean_plsqlnames[what],
                                       self.process(binary.left, **kwargs),
                                       self.process(binary.right, **kwargs))
+        elif what is sql.operators.in_op:
+            if isinstance(binary.right, sql.expression._Grouping):
+                return self.process(sql.or_(*[binary.left == clause 
+                                              for clause in binary.right.elem.clauses]),
+                                    **kwargs)
+            elif isinstance(binary.right, (sql.expression._FromGrouping, sql.expression.Alias)):
+                if isinstance(binary.right, sql.expression._FromGrouping):
+                    right = binary.right.elem
+                    right_alias_args = []
+                else:
+                    right = binary.right.selectable
+                    right_alias_args = [binary.right.name]
+                first_column_name = right.columns.keys()[0]
+                first_column = right.columns[first_column_name]
+                first_column_table = first_column.table
+
+                # This is to have the select clause named
+                first_column_table_alias = first_column_table.alias(*right_alias_args)
+                first_column_alias = getattr(first_column_table_alias.columns, first_column_name)
+                return self.process(sql.select([sql.func.max(binary.left == first_column_alias
+                                                             ).label(first_column_name)
+                                                ]),
+                                    asfrom = True)
+            else:
+                import pdb
+                pdb.set_trace()
+                raise Exception("Unknown type of expression used to the right of IN operator")
         else:
             return compiler.DefaultCompiler.visit_binary(self, binary, **kwargs)
 

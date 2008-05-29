@@ -2179,7 +2179,9 @@ class _BinaryExpression(ColumnElement):
             self.modifiers = modifiers
 
     def _get_from_objects(self, **modifiers):
-        return self.left._get_from_objects(**modifiers) + self.right._get_from_objects(**modifiers)
+        res = self.left._get_from_objects(**modifiers)
+        if self.operator is operators.in_op: return res
+        return res + self.right._get_from_objects(**modifiers)
 
     def _copy_internals(self, clone=_clone):
         self.left = clone(self.left)
