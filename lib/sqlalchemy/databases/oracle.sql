@@ -1,10 +1,15 @@
 create or replace package sqlalchemy
 is
+        function is_not(operand number)
+                return number deterministic;
+
         function is_and(left number, right number)
                 return number deterministic;
 
         function is_or(left number, right number)
                 return number deterministic;
+
+
 
         function is_equal(left char, right char)
                 return number deterministic;
@@ -16,6 +21,30 @@ is
                 return number deterministic;
 
         function is_not_equal(left number, right number)
+                return number deterministic;
+
+        function is_greater(left char, right char)
+                return number deterministic;
+
+        function is_greater(left number, right number)
+                return number deterministic;
+
+        function is_smaller(left char, right char)
+                return number deterministic;
+
+        function is_smaller(left number, right number)
+                return number deterministic;
+
+        function is_greater_or_equal(left char, right char)
+                return number deterministic;
+
+        function is_greater_or_equal(left number, right number)
+                return number deterministic;
+
+        function is_smaller_or_equal(left char, right char)
+                return number deterministic;
+
+        function is_smaller_or_equal(left number, right number)
                 return number deterministic;
 
 end sqlalchemy;
@@ -53,6 +82,8 @@ is
                 return left + right;
         end;
 
+
+
         function is_equal(left char, right char)
                 return number deterministic
         is
@@ -91,6 +122,94 @@ is
         is
         begin
                 if left != right then
+                        return 1;
+                end if;
+
+                return 0;
+        end;
+
+        function is_greater(left char, right char)
+                return number deterministic
+        is
+        begin
+                if left > right then
+                        return 1;
+                end if;
+
+                return 0;
+        end;
+
+        function is_greater(left number, right number)
+                return number deterministic
+        is
+        begin
+                if left > right then
+                        return 1;
+                end if;
+
+                return 0;
+        end;
+
+        function is_smaller(left char, right char)
+                return number deterministic
+        is
+        begin
+                if left < right then
+                        return 1;
+                end if;
+
+                return 0;
+        end;
+
+        function is_smaller(left number, right number)
+                return number deterministic
+        is
+        begin
+                if left < right then
+                        return 1;
+                end if;
+
+                return 0;
+        end;
+
+        function is_greater_or_equal(left char, right char)
+                return number deterministic
+        is
+        begin
+                if left >= right then
+                        return 1;
+                end if;
+
+                return 0;
+        end;
+
+        function is_greater_or_equal(left number, right number)
+                return number deterministic
+        is
+        begin
+                if left >= right then
+                        return 1;
+                end if;
+
+                return 0;
+        end;
+
+        function is_smaller_or_equal(left char, right char)
+                return number deterministic
+        is
+        begin
+                if left <= right then
+                        return 1;
+                end if;
+
+                return 0;
+        end;
+
+        function is_smaller_or_equal(left number, right number)
+                return number deterministic
+        is
+        begin
+                if left <= right then
                         return 1;
                 end if;
 

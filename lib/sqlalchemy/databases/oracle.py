@@ -359,6 +359,8 @@ class OracleDialect(default.DefaultDialect):
         if not isinstance(column.table, (sql.TableClause, sql.Select)):
             return None
         else:
+            if "rowid_" in column.table.columns:
+                return "rowid_"
             return "rowid"
 
     def create_xid(self):
@@ -689,14 +691,24 @@ class OracleCompiler(compiler.DefaultCompiler):
         """Need to determine how to get ``LIMIT``/``OFFSET`` into a ``UNION`` for Oracle."""
         pass
 
-    boolean_plsqlnames = {operator.not_: 'sqlalchemy.is_not',
+    boolean_plsqlnames = {operator.inv: 'sqlalchemy.is_not',
                           operator.and_: 'sqlalchemy.is_and',
                           operator.or_: 'sqlalchemy.is_or',
                           operator.eq: 'sqlalchemy.is_equal',
-                          operator.ne: 'sqlalchemy.is_not_equal'}
+                          operator.ne: 'sqlalchemy.is_not_equal',
+                          operator.gt: 'sqlalchemy.is_greater',
+                          operator.lt: 'sqlalchemy.is_smaller',
+                          operator.ge: 'sqlalchemy.is_greater_or_equal',
+                          operator.le: 'sqlalchemy.is_smaller_or_equal',
+                          }
     
-#     def visit_unary(self, unary, **kwargs):
-#         return compiler.DefaultCompiler.visit_unary(self, unary, **kwargs)
+    def visit_unary(self, unary, **kwargs):
+        what = unary.operator
+        if what in self.boolean_plsqlnames:
+            return "%s(%s)"  % (self.boolean_plsqlnames[what],
+                                self.process(unary.left, **kwargs))
+        else:
+            return compiler.DefaultCompiler.visit_unary(self, unary, **kwargs)
 
     def visit_binary(self, binary, **kwargs):
         what = binary.operator
@@ -732,6 +744,8 @@ class OracleCompiler(compiler.DefaultCompiler):
                 pdb.set_trace()
                 raise Exception("Unknown type of expression used to the right of IN operator")
         else:
+            import pdb
+            pdb.set_trace()
             return compiler.DefaultCompiler.visit_binary(self, binary, **kwargs)
 
     def visit_clauselist(self, clauselist, **kwargs):
@@ -739,13 +753,19 @@ class OracleCompiler(compiler.DefaultCompiler):
         what = what or clauselist.clauses and getattr(clauselist.clauses[0], 'text', None)
 
         if what == 'WHEN':
-            return "when %s != 0 then %s"  % (
+            return "when %s = 1 then %s"  % (
                 self.process(clauselist.clauses[1], **kwargs),
                 self.process(clauselist.clauses[3], **kwargs))
         elif what in self.boolean_plsqlnames:
-            return "%s(%s)"  % (self.boolean_plsqlnames[what],
-                                ', '.join([self.process(subclause, **kwargs)
-                                           for subclause in clauselist.clauses]))
+            res = ""
+            for subclause in reversed(clauselist.clauses):
+                if not res:
+                    res = self.process(subclause, **kwargs)
+                else:
+                    res = "%s(%s, %s)" % (self.boolean_plsqlnames[what],
+                                          self.process(subclause, **kwargs),
+                                          res)
+            return res
         else:
             return compiler.DefaultCompiler.visit_clauselist(self, clauselist, **kwargs)
 
@@ -781,15 +801,18 @@ class OracleCompiler(compiler.DefaultCompiler):
                 limitselect._is_wrapper = True
 
                 if select._offset is not None:
-                    limitselect.append_whereclause("ora_rn>%d" % select._offset)
+                    limitselect.append_whereclause(select.c.ora_rn > select._offset)
                     if select._limit is not None:
-                        limitselect.append_whereclause("ora_rn<=%d" % (select._limit + select._offset))
+                        limitselect.append_whereclause(select.c.ora_rn <= select._limit + select._offset)
                 else:
-                    limitselect.append_whereclause("ora_rn<=%d" % select._limit)
+                    limitselect.append_whereclause(select.c.ora_rn <= select._limit)
                 select = limitselect
 
         kwargs['iswrapper'] = getattr(select, '_is_wrapper', False)
         return compiler.DefaultCompiler.visit_select(self, select, **kwargs)
+
+    def visit_join(self, join, asfrom=False, **kwargs):
+        return super(OracleCompiler, self).visit_join(join, asfrom=False, **kwargs) + " = 1"
 
     def limit_clause(self, select):
         return ""
