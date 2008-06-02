@@ -595,8 +595,7 @@ class DefaultCompiler(engine.Compiled):
 
         text = "UPDATE " + self.preparer.format_table(update_stmt.table) + " SET " + string.join(["%s=%s" % (self.preparer.quote(c[0], c[0].name), c[1]) for c in colparams], ', ')
 
-        if update_stmt._whereclause:
-            text += " WHERE " + self.process(update_stmt._whereclause)
+        text += self.get_select_where(update_stmt)
 
         self.stack.pop(-1)
 
@@ -689,8 +688,7 @@ class DefaultCompiler(engine.Compiled):
 
         text = "DELETE FROM " + self.preparer.format_table(delete_stmt.table)
 
-        if delete_stmt._whereclause:
-            text += " WHERE " + self.process(delete_stmt._whereclause)
+        text += self.get_select_where(delete_stmt)
 
         self.stack.pop(-1)
 
