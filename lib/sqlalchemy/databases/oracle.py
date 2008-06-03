@@ -650,16 +650,20 @@ class OracleCompiler(compiler.DefaultCompiler):
 
     def visit_bindparam(self, bindparam, **kwargs):
         value_name = compiler.DefaultCompiler.visit_bindparam(self, bindparam, **kwargs)
-        
-        try:
-            type_spec = self.dialect.type_descriptor(bindparam.type).get_col_spec()
-        except NotImplementedError:
-            return value_name
-        else:
+
+        type_spec = None
+        if not hasattr(bindparam.type, 'length') or bindparam.type.length is not None:
+            try:
+                type_spec = self.dialect.type_descriptor(bindparam.type).get_col_spec()
+            except NotImplementedError:
+                pass
+        if type_spec:
             return "cast(%(value_name)s as %(type)s)" % {
                 'value_name': value_name,
                 'type': type_spec
                 }
+        else:
+            return value_name
 
     def visit_join(self, join, **kwargs):
         if self.dialect.use_ansi:
