@@ -708,15 +708,17 @@ class OracleCompiler(compiler.DefaultCompiler):
         """Need to determine how to get ``LIMIT``/``OFFSET`` into a ``UNION`` for Oracle."""
         pass
 
-    boolean_plsqlnames = {operator.inv: 'sqlalchemy.is_not',
-                          operator.and_: 'sqlalchemy.is_and',
-                          operator.or_: 'sqlalchemy.is_or',
-                          operator.eq: 'sqlalchemy.is_equal',
-                          operator.ne: 'sqlalchemy.is_not_equal',
-                          operator.gt: 'sqlalchemy.is_greater',
-                          operator.lt: 'sqlalchemy.is_smaller',
-                          operator.ge: 'sqlalchemy.is_greater_or_equal',
-                          operator.le: 'sqlalchemy.is_smaller_or_equal',
+    boolean_plsqlnames = {sql_operators.inv: 'sqlalchemy.is_not',
+                          sql_operators.and_: 'sqlalchemy.is_and',
+                          sql_operators.or_: 'sqlalchemy.is_or',
+                          sql_operators.is_: 'sqlalchemy.is_is_null',
+                          sql_operators.isnot: 'sqlalchemy.is_is_not_null',
+                          sql_operators.eq: 'sqlalchemy.is_equal',
+                          sql_operators.ne: 'sqlalchemy.is_not_equal',
+                          sql_operators.gt: 'sqlalchemy.is_greater',
+                          sql_operators.lt: 'sqlalchemy.is_smaller',
+                          sql_operators.ge: 'sqlalchemy.is_greater_or_equal',
+                          sql_operators.le: 'sqlalchemy.is_smaller_or_equal',
                           }
     
     def visit_unary(self, unary, **kwargs):
@@ -729,10 +731,18 @@ class OracleCompiler(compiler.DefaultCompiler):
 
     def visit_binary(self, binary, **kwargs):
         what = binary.operator
-        if what in self.boolean_plsqlnames:
-              return "%s(%s, %s)"  % (self.boolean_plsqlnames[what],
-                                      self.process(binary.left, **kwargs),
-                                      self.process(binary.right, **kwargs))
+        if what in (sql_operators.is_, sql_operators.isnot):
+            opers = [binary.left, binary.right] 
+
+            assert isinstance(opers[0], sql.expression._Null) or isinstance(opers[1], sql.expression._Null)
+
+            if isinstance(opers[0], sql.expression._Null) and isinstance(opers[1], sql.expression._Null):
+                return "1"
+
+            if isinstance(opers[0], sql.expression._Null):
+                opers.reverse()
+            return "%s(%s)"  % (self.boolean_plsqlnames[what],
+                                self.process(opers[0], **kwargs))
         elif what is sql.operators.in_op:
             if isinstance(binary.right, sql.expression._Grouping):
                 return self.process(sql.or_(*[binary.left == clause 
@@ -760,7 +770,12 @@ class OracleCompiler(compiler.DefaultCompiler):
                 import pdb
                 pdb.set_trace()
                 raise Exception("Unknown type of expression used to the right of IN operator")
+        elif what in self.boolean_plsqlnames:
+              return "%s(%s, %s)"  % (self.boolean_plsqlnames[what],
+                                      self.process(binary.left, **kwargs),
+                                      self.process(binary.right, **kwargs))
         else:
+            # FIXME: Are there any other operators we need to handle specially?
             import pdb
             pdb.set_trace()
             return compiler.DefaultCompiler.visit_binary(self, binary, **kwargs)

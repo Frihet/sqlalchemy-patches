@@ -11,6 +11,18 @@ is
 
 
 
+        function is_is_null(left char)
+                return number deterministic;
+
+        function is_is_null(left number)
+                return number deterministic;
+
+        function is_is_not_null(left char)
+                return number deterministic;
+
+        function is_is_not_null(left number)
+                return number deterministic;
+
         function is_equal(left char, right char)
                 return number deterministic;
 
@@ -50,6 +62,8 @@ is
 end sqlalchemy;
 /
 
+show errors;
+
 /**
  * SQLAlchemy PL/SQL functions for supporting functionality such
  * as boolean selects.
@@ -83,6 +97,50 @@ is
         end;
 
 
+
+        function is_is_null(left char)
+                return number deterministic
+        is
+        begin
+                if left is null then
+                        return 1;
+                end if;
+
+                return 0;
+        end;
+
+        function is_is_null(left number)
+                return number deterministic
+        is
+        begin
+                if left is null then
+                        return 1;
+                end if;
+
+                return 0;
+        end;
+
+        function is_is_not_null(left char)
+                return number deterministic
+        is
+        begin
+                if left is not null then
+                        return 1;
+                end if;
+
+                return 0;
+        end;
+
+        function is_is_not_null(left number)
+                return number deterministic
+        is
+        begin
+                if left is not null then
+                        return 1;
+                end if;
+
+                return 0;
+        end;
 
         function is_equal(left char, right char)
                 return number deterministic
