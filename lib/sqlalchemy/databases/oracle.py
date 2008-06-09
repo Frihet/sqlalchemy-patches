@@ -776,8 +776,8 @@ class OracleCompiler(compiler.DefaultCompiler):
                                       self.process(binary.right, **kwargs))
         else:
             # FIXME: Are there any other operators we need to handle specially?
-            import pdb
-            pdb.set_trace()
+            # import pdb
+            # pdb.set_trace()
             return compiler.DefaultCompiler.visit_binary(self, binary, **kwargs)
 
     def visit_clauselist(self, clauselist, **kwargs):
