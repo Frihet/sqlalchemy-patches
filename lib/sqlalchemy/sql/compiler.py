@@ -593,7 +593,9 @@ class DefaultCompiler(engine.Compiled):
         self.isupdate = True
         colparams = self._get_colparams(update_stmt)
 
-        text = "UPDATE " + self.preparer.format_table(update_stmt.table) + " SET " + string.join(["%s=%s" % (self.preparer.quote(c[0], c[0].name), c[1]) for c in colparams], ', ')
+        text = "UPDATE " + self.preparer.format_table(update_stmt.table) + " SET " + string.join([
+            "%s=%s" % (self.preparer.truncated_identifier('colident', c[0].name), c[1])
+            for c in colparams], ', ')
 
         text += self.get_select_where(update_stmt)
 
