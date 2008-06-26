@@ -725,7 +725,7 @@ class OracleCompiler(compiler.DefaultCompiler):
         what = unary.operator
         if what in self.boolean_plsqlnames:
             return "%s(%s)"  % (self.boolean_plsqlnames[what],
-                                self.process(unary.left, **kwargs))
+                                self.process(unary.element, **kwargs))
         else:
             return compiler.DefaultCompiler.visit_unary(self, unary, **kwargs)
 
