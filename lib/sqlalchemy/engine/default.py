@@ -14,6 +14,7 @@ as the base class for their own corresponding classes.
 
 
 import re, random
+from sqlalchemy import types as sqltypes
 from sqlalchemy.engine import base
 from sqlalchemy.sql import compiler, expression
 
@@ -22,6 +23,82 @@ AUTOCOMMIT_REGEXP = re.compile(r'\s*(?:UPDATE|INSERT|CREATE|DELETE|DROP|ALTER)',
                                re.I | re.UNICODE)
 SELECT_REGEXP = re.compile(r'\s*SELECT', re.I | re.UNICODE)
 
+class DefaultNumeric(sqltypes.Numeric):
+    def get_col_spec(self):
+        if not self.precision:
+            return "NUMERIC"
+        else:
+            return "NUMERIC(%(precision)s, %(length)s)" % {'precision': self.precision, 'length' : self.length}
+
+class DefaultFloat(sqltypes.Float):
+    def get_col_spec(self):
+        if not self.precision:
+            return "FLOAT"
+        else:
+            return "FLOAT(%(precision)s)" % {'precision': self.precision}
+
+class DefaultInteger(sqltypes.Integer):
+    def get_col_spec(self):
+        return "INTEGER"
+
+class DefaultSmallInteger(sqltypes.Smallinteger):
+    def get_col_spec(self):
+        return "SMALLINT"
+
+class DefaultBigInteger(DefaultInteger):
+    def get_col_spec(self):
+        return "BIGINT"
+
+class DefaultDateTime(sqltypes.DateTime):
+    def get_col_spec(self):
+        return "TIMESTAMP " + (self.timezone and "WITH" or "WITHOUT") + " TIME ZONE"
+
+class DefaultDate(sqltypes.Date):
+    def get_col_spec(self):
+        return "DATE"
+
+class DefaultTime(sqltypes.Time):
+    def get_col_spec(self):
+        return "TIME " + (self.timezone and "WITH" or "WITHOUT") + " TIME ZONE"
+
+class DefaultInterval(sqltypes.TypeEngine):
+    def get_col_spec(self):
+        return "INTERVAL"
+
+class DefaultText(sqltypes.Text):
+    def get_col_spec(self):
+        return "TEXT"
+
+class DefaultString(sqltypes.String):
+    def get_col_spec(self):
+        return "VARCHAR(%(length)s)" % {'length' : self.length}
+
+class DefaultChar(sqltypes.CHAR):
+    def get_col_spec(self):
+        return "CHAR(%(length)s)" % {'length' : self.length}
+
+class DefaultBinary(sqltypes.Binary):
+    def get_col_spec(self):
+        return "BYTEA"
+
+class DefaultBoolean(sqltypes.Boolean):
+    def get_col_spec(self):
+        return "BOOLEAN"
+
+colspecs = {
+    sqltypes.Integer : DefaultInteger,
+    sqltypes.Smallinteger : DefaultSmallInteger,
+    sqltypes.Numeric : DefaultNumeric,
+    sqltypes.Float : DefaultFloat,
+    sqltypes.DateTime : DefaultDateTime,
+    sqltypes.Date : DefaultDate,
+    sqltypes.Time : DefaultTime,
+    sqltypes.String : DefaultString,
+    sqltypes.Binary : DefaultBinary,
+    sqltypes.Boolean : DefaultBoolean,
+    sqltypes.Text : DefaultText,
+    sqltypes.CHAR: DefaultChar,
+}
 
 class DefaultDialect(base.Dialect):
     """Default implementation of Dialect"""
@@ -132,6 +209,8 @@ class DefaultDialect(base.Dialect):
     def is_disconnect(self, e):
         return False
 
+    def type_descriptor(self, typeobj):
+        return sqltypes.adapt_type(typeobj, colspecs)
 
 class DefaultExecutionContext(base.ExecutionContext):
     def __init__(self, dialect, connection, compiled=None, statement=None, parameters=None):
