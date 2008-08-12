@@ -650,6 +650,8 @@ class OracleCompiler(compiler.DefaultCompiler):
 
     def visit_bindparam(self, bindparam, **kwargs):
         value_name = compiler.DefaultCompiler.visit_bindparam(self, bindparam, **kwargs)
+        if kwargs.get('_oracle_in_where', False):
+            return value_name
 
         type_spec = None
         if not hasattr(bindparam.type, 'length') or bindparam.type.length is not None:
@@ -690,6 +692,16 @@ class OracleCompiler(compiler.DefaultCompiler):
             visitors.traverse(f, visit_join=visit_join)
         return sql.and_(*clauses)
 
+    def _get_boolean_statement(self, what, left, right, **kwargs):
+        """
+        Get boolean statement, acts depending on oracle_in_where value
+        in kwargs.
+        """
+        if kwargs.get('_oracle_in_where', False):
+            return "%s %s %s" % (left, compiler.OPERATORS[what], right)
+        else:
+            return "%s(%s, %s)" % (self.boolean_plsqlnames[what], left, right)
+
     def visit_outer_join_column(self, vc):
         return self.process(vc.column) + "(+)"
 
@@ -723,7 +735,15 @@ class OracleCompiler(compiler.DefaultCompiler):
     
     def visit_unary(self, unary, **kwargs):
         what = unary.operator
-        if what in self.boolean_plsqlnames:
+
+        if ( kwargs.get('_oracle_in_where', False)
+             and what in (sql_operators.inv, sql_operators.is_, sql_operators.isnot) ):
+            res = '%s %s' % (compiler.OPERATORS[what], self.process(unary.element, **kwargs))
+            if kwargs.get('_oracle_in_where', False) and isinstance(unary.element, expression._BindParamClause):
+                res += ' = 1'
+            return res
+            
+        elif what in self.boolean_plsqlnames:
             return "%s(%s)"  % (self.boolean_plsqlnames[what],
                                 self.process(unary.element, **kwargs))
         else:
@@ -741,8 +761,13 @@ class OracleCompiler(compiler.DefaultCompiler):
 
             if isinstance(opers[0], sql.expression._Null):
                 opers.reverse()
-            return "%s(%s)"  % (self.boolean_plsqlnames[what],
-                                self.process(opers[0], **kwargs))
+
+            if kwargs.get('_oracle_in_where', False):
+                return '%s %s NULL' % (self.process(opers[0], **kwargs),
+                                       compiler.OPERATORS[what])
+            else:
+                return "%s(%s)"  % (self.boolean_plsqlnames[what],
+                                    self.process(opers[0], **kwargs))
         elif what is sql.operators.in_op:
             if isinstance(binary.right, sql.expression._Grouping):
                 return self.process(sql.or_(*[binary.left == clause 
@@ -770,10 +795,15 @@ class OracleCompiler(compiler.DefaultCompiler):
                 import pdb
                 pdb.set_trace()
                 raise Exception("Unknown type of expression used to the right of IN operator")
+
         elif what in self.boolean_plsqlnames:
-              return "%s(%s, %s)"  % (self.boolean_plsqlnames[what],
-                                      self.process(binary.left, **kwargs),
-                                      self.process(binary.right, **kwargs))
+            lr_kwargs = dict(kwargs)
+            lr_kwargs['_oracle_in_where'] = False
+
+            return self._get_boolean_statement(what,
+                                               self.process(binary.left, **lr_kwargs),
+                                               self.process(binary.right, **lr_kwargs),
+                                               **kwargs)
         else:
             # FIXME: Are there any other operators we need to handle specially?
             # import pdb
@@ -790,13 +820,17 @@ class OracleCompiler(compiler.DefaultCompiler):
                 self.process(clauselist.clauses[3], **kwargs))
         elif what in self.boolean_plsqlnames:
             res = ""
+
             for subclause in reversed(clauselist.clauses):
+                res_sub = self.process(subclause, **kwargs)
+                if kwargs.get('_oracle_in_where', False) and isinstance(subclause, expression._BindParamClause):
+                    res_sub += ' = 1'
+
                 if not res:
-                    res = self.process(subclause, **kwargs)
+                    res = res_sub
                 else:
-                    res = "%s(%s, %s)" % (self.boolean_plsqlnames[what],
-                                          self.process(subclause, **kwargs),
-                                          res)
+                    res = self._get_boolean_statement(what, res_sub, res, **kwargs)
+
             return res
         else:
             return compiler.DefaultCompiler.visit_clauselist(self, clauselist, **kwargs)
@@ -855,11 +889,9 @@ class OracleCompiler(compiler.DefaultCompiler):
         else:
             return super(OracleCompiler, self).for_update_clause(select)
 
-    def get_select_where(self, select):
-        where = compiler.DefaultCompiler.get_select_where(self, select)
-        if where:
-            return where + ' = 1'
-        return ''
+    def get_select_where(self, select, **kwargs):
+        kwargs['_oracle_in_where'] = True
+        return compiler.DefaultCompiler.get_select_where(self, select, **kwargs)
 
 class OracleSchemaGenerator(compiler.SchemaGenerator):
     def get_column_specification(self, column, **kwargs):

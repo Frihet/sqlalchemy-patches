@@ -224,7 +224,7 @@ class DefaultCompiler(engine.Compiled):
         return ""
 
     def visit_grouping(self, grouping, **kwargs):
-        return "(" + self.process(grouping.elem) + ")"
+        return "(" + self.process(grouping.elem, **kwargs) + ")"
 
     def visit_label(self, label, result_map=None):
         labelname = self.preparer.truncated_identifier("colident", label.name)
@@ -508,9 +508,9 @@ class DefaultCompiler(engine.Compiled):
         else:
             return text
 
-    def get_select_where(self, select):
+    def get_select_where(self, select, **kwargs):
         if select._whereclause is not None:
-            t = self.process(select._whereclause)
+            t = self.process(select._whereclause, **kwargs)
             if t:
                 return " \nWHERE " + t
         return ''
