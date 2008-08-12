@@ -768,7 +768,7 @@ class OracleCompiler(compiler.DefaultCompiler):
             else:
                 return "%s(%s)"  % (self.boolean_plsqlnames[what],
                                     self.process(opers[0], **kwargs))
-        elif what is sql.operators.in_op:
+        elif what is sql.operators.in_op and not kwargs.get('_oracle_in_where', False):
             if isinstance(binary.right, sql.expression._Grouping):
                 return self.process(sql.or_(*[binary.left == clause 
                                               for clause in binary.right.elem.clauses]),
@@ -787,6 +787,7 @@ class OracleCompiler(compiler.DefaultCompiler):
                 # This is to have the select clause named
                 first_column_table_alias = first_column_table.alias(*right_alias_args)
                 first_column_alias = getattr(first_column_table_alias.columns, first_column_name)
+
                 return self.process(sql.select([sql.func.max(binary.left == first_column_alias
                                                              ).label(first_column_name)
                                                 ]),
