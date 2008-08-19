@@ -788,10 +788,11 @@ class OracleCompiler(compiler.DefaultCompiler):
                 first_column_table_alias = first_column_table.alias(*right_alias_args)
                 first_column_alias = getattr(first_column_table_alias.columns, first_column_name)
 
+                kwargs['asfrom'] = True
                 return self.process(sql.select([sql.func.max(binary.left == first_column_alias
                                                              ).label(first_column_name)
                                                 ]),
-                                    asfrom = True)
+                                    **kwargs)
             else:
                 import pdb
                 pdb.set_trace()
@@ -816,8 +817,11 @@ class OracleCompiler(compiler.DefaultCompiler):
         what = what or clauselist.clauses and getattr(clauselist.clauses[0], 'text', None)
 
         if what == 'WHEN':
-            return "when %s = 1 then %s"  % (
-                self.process(clauselist.clauses[1], **kwargs),
+            in_where = dict(kwargs)
+            in_where['_oracle_in_where'] = True
+
+            return "when %s then %s"  % (
+                self.process(clauselist.clauses[1], **in_where),
                 self.process(clauselist.clauses[3], **kwargs))
         elif what in self.boolean_plsqlnames:
             res = ""
@@ -835,6 +839,16 @@ class OracleCompiler(compiler.DefaultCompiler):
             return res
         else:
             return compiler.DefaultCompiler.visit_clauselist(self, clauselist, **kwargs)
+
+    def visit_calculatedclause(self, clause, **kwargs):
+        what = getattr(clause.clause_expr, 'operator', None)
+        what = what or clause.clause_expr.clauses and getattr(clause.clause_expr.clauses[0], 'text', None)
+
+        expr = compiler.DefaultCompiler.visit_calculatedclause(self, clause, **kwargs)
+        if what == 'CASE' and kwargs.get('_oracle_in_where', False):
+            expr = '%s = 1' % (expr, )
+
+        return expr
 
     def visit_select(self, select, **kwargs):
         """Look for ``LIMIT`` and OFFSET in a select statement, and if
