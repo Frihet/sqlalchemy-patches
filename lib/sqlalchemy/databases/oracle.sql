@@ -17,10 +17,16 @@ is
         function is_is_null(left number)
                 return number deterministic;
 
+        function is_is_null(left date)
+                return number deterministic;
+
         function is_is_not_null(left char)
                 return number deterministic;
 
         function is_is_not_null(left number)
+                return number deterministic;
+
+        function is_is_not_null(left date)
                 return number deterministic;
 
         function is_equal(left char, right char)
@@ -29,10 +35,16 @@ is
         function is_equal(left number, right number)
                 return number deterministic;
 
+        function is_equal(left date, right date)
+                return number deterministic;
+
         function is_not_equal(left char, right char)
                 return number deterministic;
 
         function is_not_equal(left number, right number)
+                return number deterministic;
+
+        function is_not_equal(left date, right date)
                 return number deterministic;
 
         function is_greater(left char, right char)
@@ -41,10 +53,16 @@ is
         function is_greater(left number, right number)
                 return number deterministic;
 
+        function is_greater(left date, right date)
+                return number deterministic;
+
         function is_smaller(left char, right char)
                 return number deterministic;
 
         function is_smaller(left number, right number)
+                return number deterministic;
+
+        function is_smaller(left date, right date)
                 return number deterministic;
 
         function is_greater_or_equal(left char, right char)
@@ -53,10 +71,16 @@ is
         function is_greater_or_equal(left number, right number)
                 return number deterministic;
 
+        function is_greater_or_equal(left date, right date)
+                return number deterministic;
+
         function is_smaller_or_equal(left char, right char)
                 return number deterministic;
 
         function is_smaller_or_equal(left number, right number)
+                return number deterministic;
+
+        function is_smaller_or_equal(left date, right date)
                 return number deterministic;
 
 end sqlalchemy;
@@ -120,6 +144,17 @@ is
                 return 0;
         end;
 
+        function is_is_null(left date)
+                return number deterministic
+        is
+        begin
+                if left is null then
+                        return 1;
+                end if;
+
+                return 0;
+        end;
+
         function is_is_not_null(left char)
                 return number deterministic
         is
@@ -132,6 +167,17 @@ is
         end;
 
         function is_is_not_null(left number)
+                return number deterministic
+        is
+        begin
+                if left is not null then
+                        return 1;
+                end if;
+
+                return 0;
+        end;
+
+        function is_is_not_null(left date)
                 return number deterministic
         is
         begin
@@ -164,6 +210,17 @@ is
                 return 0;
         end;
 
+        function is_equal(left date, right date)
+                return number deterministic
+        is
+        begin
+                if left = right then
+                        return 1;
+                end if;
+
+                return 0;
+        end;
+
         function is_not_equal(left char, right char)
                 return number deterministic
         is
@@ -176,6 +233,17 @@ is
         end;
 
         function is_not_equal(left number, right number)
+                return number deterministic
+        is
+        begin
+                if left != right then
+                        return 1;
+                end if;
+
+                return 0;
+        end;
+
+        function is_not_equal(left date, right date)
                 return number deterministic
         is
         begin
@@ -208,6 +276,17 @@ is
                 return 0;
         end;
 
+        function is_greater(left date, right date)
+                return number deterministic
+        is
+        begin
+                if left > right then
+                        return 1;
+                end if;
+
+                return 0;
+        end;
+
         function is_smaller(left char, right char)
                 return number deterministic
         is
@@ -220,6 +299,17 @@ is
         end;
 
         function is_smaller(left number, right number)
+                return number deterministic
+        is
+        begin
+                if left < right then
+                        return 1;
+                end if;
+
+                return 0;
+        end;
+
+        function is_smaller(left date, right date)
                 return number deterministic
         is
         begin
@@ -252,6 +342,17 @@ is
                 return 0;
         end;
 
+        function is_greater_or_equal(left date, right date)
+                return number deterministic
+        is
+        begin
+                if left >= right then
+                        return 1;
+                end if;
+
+                return 0;
+        end;
+
         function is_smaller_or_equal(left char, right char)
                 return number deterministic
         is
@@ -264,6 +365,17 @@ is
         end;
 
         function is_smaller_or_equal(left number, right number)
+                return number deterministic
+        is
+        begin
+                if left <= right then
+                        return 1;
+                end if;
+
+                return 0;
+        end;
+
+        function is_smaller_or_equal(left date, right date)
                 return number deterministic
         is
         begin
