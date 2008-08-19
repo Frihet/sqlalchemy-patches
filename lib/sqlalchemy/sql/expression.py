@@ -1386,8 +1386,13 @@ class _CompareMixin(ColumnOperators):
         """
         return lambda other: self.__operate(operator, other)
 
+    def _bind_param_type(self):
+        if not isinstance(self.type, sqltypes.DateTime):
+            return self.type
+        return sqltypes.Interval()
+
     def _bind_param(self, obj):
-        return _BindParamClause(None, obj, type_=self.type, unique=True)
+        return _BindParamClause(None, obj, type_=self._bind_param_type(), unique=True)
 
     def _check_literal(self, other):
         if isinstance(other, _BindParamClause) and isinstance(other.type, sqltypes.NullType):
@@ -2056,7 +2061,7 @@ class _CalculatedClause(ColumnElement):
         return self.clauses._get_from_objects(**modifiers)
 
     def _bind_param(self, obj):
-        return _BindParamClause(self.name, obj, type_=self.type, unique=True)
+        return _BindParamClause(self.name, obj, type_=self._bind_param_type(), unique=True)
 
     def select(self):
         return select([self])
