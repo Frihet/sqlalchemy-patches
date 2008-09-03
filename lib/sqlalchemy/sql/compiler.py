@@ -975,14 +975,22 @@ class IdentifierPreparer(object):
         if (ident_class, name) in self.generated_ids:
             return self.generated_ids[(ident_class, name)]
 
-        # Simple checksum for id at the end
-        anon_len = len(anonname)
+        # Simple checksum for id at the end. Note: We can not use a
+        # counter here, since the generation would then be dependent
+        # on the order in which things are created/initialized, and
+        # that can be different between when creating the tables in
+        # the database, and when actually using them in an app. The
+        # ID-number can only depend on the name itself, hence a
+        # checksum.
+
+        prefix_len = 3
         checksum_len = 6
+
+        anon_len = len(anonname)
         checksum = sha.sha(anonname).hexdigest()[:checksum_len]
 
         # This is just an attempt to get sort of readable names in the DB
         if self.dialect.max_identifier_length - checksum_len - 1 - anon_len < 0:
-            prefix_len = 3
             postfix_len = self.dialect.max_identifier_length - 1 - checksum_len - 1 - prefix_len
             truncname = "%s_%s_%s" % (anonname[0:prefix_len],
                                       anonname[anon_len - postfix_len:],
