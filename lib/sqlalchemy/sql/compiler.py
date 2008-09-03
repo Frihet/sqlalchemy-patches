@@ -18,7 +18,7 @@ creating database-specific compilers and schema generators, the module
 is otherwise internal to SQLAlchemy.
 """
 
-import string, re
+import string, re, sha
 from sqlalchemy import schema, engine, util, exceptions, logging
 from sqlalchemy.sql import operators, functions
 from sqlalchemy.sql import expression as sql
@@ -977,8 +977,8 @@ class IdentifierPreparer(object):
 
         # Simple checksum for id at the end
         anon_len = len(anonname)
-        checksum_len = 4
-        checksum = sum(ord(c) for c in anonname)
+        checksum_len = 6
+        checksum = sha.sha(anonname).hexdigest()[:checksum_len]
 
         # This is just an attempt to get sort of readable names in the DB
         if self.dialect.max_identifier_length - checksum_len - 1 - anon_len < 0:
@@ -986,10 +986,10 @@ class IdentifierPreparer(object):
             postfix_len = self.dialect.max_identifier_length - 1 - checksum_len - 1 - prefix_len
             truncname = "%s_%s_%s" % (anonname[0:prefix_len],
                                       anonname[anon_len - postfix_len:],
-                                      hex(checksum)[2:6])
+                                      checksum)
         else:
             truncname = "%s_%s" % (anonname,
-                                   hex(checksum)[2:6])
+                                   checksum)
 
         self.generated_ids[(ident_class, name)] = truncname
 
