@@ -967,7 +967,7 @@ class IdentifierPreparer(object):
         else:
             truncname = anonname
 
-        self.logger.info("Truncated '%s' (a %s) to '%s'" % (name, ident_class, truncname))
+        self.logger.info("Truncate: %s: %s -> %s" % (ident_class, name, truncname))
 
         return truncname
 
