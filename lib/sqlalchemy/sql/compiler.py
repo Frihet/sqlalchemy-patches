@@ -19,7 +19,7 @@ is otherwise internal to SQLAlchemy.
 """
 
 import string, re
-from sqlalchemy import schema, engine, util, exceptions
+from sqlalchemy import schema, engine, util, exceptions, logging
 from sqlalchemy.sql import operators, functions
 from sqlalchemy.sql import expression as sql
 
@@ -967,26 +967,29 @@ class IdentifierPreparer(object):
         else:
             truncname = anonname
 
+        self.logger.info("Truncated '%s' (a %s) to '%s'" % (name, ident_class, truncname))
+
         return truncname
 
     def _truncate_identifier(self, ident_class, name, anonname):
         if (ident_class, name) in self.generated_ids:
             return self.generated_ids[(ident_class, name)]
 
-        # Simple checksum for id in the middle
+        # Simple checksum for id at the end
         anon_len = len(anonname)
-        counter_len = 6 # 4 characters for the hex checksum, plus one _ on either side
+        checksum_len = 4
         checksum = sum(ord(c) for c in anonname)
 
         # This is just an attempt to get sort of readable names in the DB
-        if anon_len < counter_len:
-            prefix_len = self.dialect.max_identifier_length / 2
-            postfix_len = anon_len - prefix_len
+        if self.dialect.max_identifier_length - checksum_len - 1 - anon_len < 0:
+            prefix_len = 3
+            postfix_len = self.dialect.max_identifier_length - 1 - checksum_len - 1 - prefix_len
+            truncname = "%s_%s_%s" % (anonname[0:prefix_len],
+                                      anonname[anon_len - postfix_len:],
+                                      hex(checksum)[2:6])
         else:
-            prefix_len = (self.dialect.max_identifier_length - counter_len) / 2
-            postfix_len = self.dialect.max_identifier_length - counter_len - prefix_len
-
-        truncname = anonname[0:prefix_len] + "_" + hex(checksum)[2:6] + "_" + anonname[anon_len - postfix_len:]
+            truncname = "%s_%s" % (anonname,
+                                   hex(checksum)[2:6])
 
         self.generated_ids[(ident_class, name)] = truncname
 
@@ -1142,3 +1145,5 @@ class IdentifierPreparer(object):
 
         return [self._unescape_identifier(i)
                 for i in [a or b for a, b in r.findall(identifiers)]]
+
+IdentifierPreparer.logger = logging.class_logger(IdentifierPreparer)
