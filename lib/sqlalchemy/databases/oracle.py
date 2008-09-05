@@ -355,11 +355,13 @@ class OracleDialect(default.DefaultDialect):
     def type_descriptor(self, typeobj):
         return sqltypes.adapt_type(typeobj, colspecs)
 
-    def oid_column_name(self, column):
-        if not isinstance(column.table, (sql.TableClause, sql.Select)):
+    def oid_column_name(self, column = None, table = None):
+        if column:
+            table = column.table
+        if not isinstance(table, (sql.TableClause, sql.Select)):
             return None
         else:
-            if "rowid_" in column.table.columns:
+            if "rowid_" in table.columns:
                 return "rowid_"
             return "rowid"
 
@@ -871,8 +873,9 @@ class OracleCompiler(compiler.DefaultCompiler):
                 # to use ROW_NUMBER(), an ORDER BY is required.
                 orderby = self.process(select._order_by_clause)
                 if not orderby:
-                    orderby = list(select.oid_column.proxies)[0]
-                    orderby = self.process(orderby)
+                    orderby = self.process(getattr(select, self.oid_column_name(table = select)))
+                    #orderby = list(select.oid_column.proxies)[0]
+                    #orderby = self.process(orderby)
 
                 select = select.column(sql.literal_column("ROW_NUMBER() OVER (ORDER BY %s)" % orderby).label("ora_rn")).order_by(None)
                 select._oracle_visit = True
