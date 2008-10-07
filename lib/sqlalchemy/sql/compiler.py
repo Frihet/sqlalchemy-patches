@@ -18,7 +18,7 @@ creating database-specific compilers and schema generators, the module
 is otherwise internal to SQLAlchemy.
 """
 
-import string, re, sha
+import string, re, itertools, sha
 from sqlalchemy import schema, engine, util, exceptions, logging
 from sqlalchemy.sql import operators, functions
 from sqlalchemy.sql import expression as sql
@@ -90,7 +90,8 @@ OPERATORS =  {
     operators.as_ : 'AS',
     operators.exists : 'EXISTS',
     operators.is_ : 'IS',
-    operators.isnot : 'IS NOT'
+    operators.isnot : 'IS NOT',
+    operators.collate : 'COLLATE',
 }
 
 FUNCTIONS = {
@@ -396,6 +397,36 @@ class DefaultCompiler(engine.Compiled):
 
         return bind_name
 
+    def truncated_identifier(self, ident_class, name):
+        if (ident_class, name) in self.generated_ids:
+            return self.generated_ids[(ident_class, name)]
+
+        anonname = ANONYMOUS_LABEL.sub(self.process_anon, name)
+        if (   len(anonname) > self.dialect.max_identifier_length
+            or (   self.dialect.reserved_words_are_reserved_for_eternity
+                and anonname in self.reserved_words)):
+
+            truncname = self._truncate_identifier(ident_class, name, anonname)
+        else:
+            truncname = anonname
+
+        self.logger.info("Truncate: %s: %s -> %s" % (ident_class, name, truncname))
+
+        return truncname
+
+    def process_anon(self, match):
+        (ident, derived) = match.group(1,2)
+
+        key = ('anonymous', ident)
+        if key in self.generated_ids:
+            return self.generated_ids[key]
+        else:
+            anonymous_counter = self.generated_ids.get(('anon_counter', derived), 1)
+            newname = derived + "_" + str(anonymous_counter)
+            self.generated_ids[('anon_counter', derived)] = anonymous_counter + 1
+            self.generated_ids[key] = newname
+            return newname
+
     def _anonymize(self, name):
         return ANONYMOUS_LABEL.sub(self.preparer.process_anon, name)
 
@@ -428,7 +459,7 @@ class DefaultCompiler(engine.Compiled):
             not isinstance(column.table, sql.Select):
             return column.label(column.name)
         elif not isinstance(column, (sql._UnaryExpression, sql._TextClause)) and (not hasattr(column, 'name') or isinstance(column, sql._Function)):
-            return column.anon_label
+            return column.label(column.anon_label)
         else:
             return column
 
@@ -456,10 +487,7 @@ class DefaultCompiler(engine.Compiled):
 
         froms = select._get_display_froms(existingfroms)
 
-        correlate_froms = util.Set()
-        for f in froms:
-            correlate_froms.add(f)
-            correlate_froms.update(f._get_from_objects())
+        correlate_froms = util.Set(itertools.chain(*([froms] + [f._get_from_objects() for f in froms])))
 
         # TODO: might want to propigate existing froms for select(select(select))
         # where innermost select should correlate to outermost
@@ -954,23 +982,6 @@ class IdentifierPreparer(object):
         # for aliases
         self.generated_ids = {}
 
-    def truncated_identifier(self, ident_class, name):
-        if (ident_class, name) in self.generated_ids:
-            return self.generated_ids[(ident_class, name)]
-
-        anonname = ANONYMOUS_LABEL.sub(self.process_anon, name)
-        if (   len(anonname) > self.dialect.max_identifier_length
-            or (   self.dialect.reserved_words_are_reserved_for_eternity
-                and anonname in self.reserved_words)):
-
-            truncname = self._truncate_identifier(ident_class, name, anonname)
-        else:
-            truncname = anonname
-
-        self.logger.info("Truncate: %s: %s -> %s" % (ident_class, name, truncname))
-
-        return truncname
-
     def _truncate_identifier(self, ident_class, name, anonname):
         if (ident_class, name) in self.generated_ids:
             return self.generated_ids[(ident_class, name)]
@@ -1002,18 +1013,6 @@ class IdentifierPreparer(object):
         self.generated_ids[(ident_class, name)] = truncname
 
         return truncname
-
-    def process_anon(self, match):
-        (ident, derived) = match.group(1,2)
-        key = ('anonymous', ident)
-        if key in self.generated_ids:
-            return self.generated_ids[key]
-        else:
-            anonymous_counter = self.generated_ids.get(('anon_counter', derived), 1)
-            newname = derived + "_" + str(anonymous_counter)
-            self.generated_ids[('anon_counter', derived)] = anonymous_counter + 1
-            self.generated_ids[key] = newname
-            return newname
 
     def _escape_identifier(self, value):
         """Escape an identifier.
