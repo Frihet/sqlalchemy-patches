@@ -397,36 +397,6 @@ class DefaultCompiler(engine.Compiled):
 
         return bind_name
 
-    def truncated_identifier(self, ident_class, name):
-        if (ident_class, name) in self.generated_ids:
-            return self.generated_ids[(ident_class, name)]
-
-        anonname = ANONYMOUS_LABEL.sub(self.process_anon, name)
-        if (   len(anonname) > self.dialect.max_identifier_length
-            or (   self.dialect.reserved_words_are_reserved_for_eternity
-                and anonname in self.reserved_words)):
-
-            truncname = self._truncate_identifier(ident_class, name, anonname)
-        else:
-            truncname = anonname
-
-        self.logger.info("Truncate: %s: %s -> %s" % (ident_class, name, truncname))
-
-        return truncname
-
-    def process_anon(self, match):
-        (ident, derived) = match.group(1,2)
-
-        key = ('anonymous', ident)
-        if key in self.generated_ids:
-            return self.generated_ids[key]
-        else:
-            anonymous_counter = self.generated_ids.get(('anon_counter', derived), 1)
-            newname = derived + "_" + str(anonymous_counter)
-            self.generated_ids[('anon_counter', derived)] = anonymous_counter + 1
-            self.generated_ids[key] = newname
-            return newname
-
     def _anonymize(self, name):
         return ANONYMOUS_LABEL.sub(self.preparer.process_anon, name)
 
@@ -1006,6 +976,36 @@ class IdentifierPreparer(object):
         # generate truncated identifier names or "anonymous" identifiers such as
         # for aliases
         self.generated_ids = {}
+
+    def truncated_identifier(self, ident_class, name):
+        if (ident_class, name) in self.generated_ids:
+            return self.generated_ids[(ident_class, name)]
+
+        anonname = ANONYMOUS_LABEL.sub(self.process_anon, name)
+        if (   len(anonname) > self.dialect.max_identifier_length
+            or (   self.dialect.reserved_words_are_reserved_for_eternity
+                and anonname in self.reserved_words)):
+
+            truncname = self._truncate_identifier(ident_class, name, anonname)
+        else:
+            truncname = anonname
+
+        self.logger.info("Truncate: %s: %s -> %s" % (ident_class, name, truncname))
+
+        return truncname
+
+    def process_anon(self, match):
+        (ident, derived) = match.group(1,2)
+
+        key = ('anonymous', ident)
+        if key in self.generated_ids:
+            return self.generated_ids[key]
+        else:
+            anonymous_counter = self.generated_ids.get(('anon_counter', derived), 1)
+            newname = derived + "_" + str(anonymous_counter)
+            self.generated_ids[('anon_counter', derived)] = anonymous_counter + 1
+            self.generated_ids[key] = newname
+            return newname
 
     def _truncate_identifier(self, ident_class, name, anonname):
         if (ident_class, name) in self.generated_ids:
