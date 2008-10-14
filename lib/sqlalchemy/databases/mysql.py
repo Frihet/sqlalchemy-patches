@@ -221,7 +221,7 @@ AUTOCOMMIT_RE = re.compile(
     r'\s*(?:UPDATE|INSERT|CREATE|DELETE|DROP|ALTER|LOAD +DATA|REPLACE)',
     re.I | re.UNICODE)
 SELECT_RE = re.compile(
-    r'\s*(?:SELECT|SHOW|DESCRIBE|XA RECOVER|CALL)',
+    r'\s*(?:SELECT|SHOW|DESCRIBE|XA RECOVER)',
     re.I | re.UNICODE)
 SET_RE = re.compile(
     r'\s*SET\s+(?:(?:GLOBAL|SESSION)\s+)?\w',
@@ -1420,10 +1420,10 @@ class MySQLDialect(default.DefaultDialect):
     # identifiers are 64, however aliases can be 255...
     max_identifier_length = 255
     supports_sane_rowcount = True
-    default_paramstyle = 'format'
 
     def __init__(self, use_ansiquotes=None, **kwargs):
         self.use_ansiquotes = use_ansiquotes
+        kwargs.setdefault('default_paramstyle', 'format')
         default.DefaultDialect.__init__(self, **kwargs)
 
     def dbapi(cls):
@@ -2064,7 +2064,7 @@ class MySQLSchemaGenerator(compiler.SchemaGenerator):
 class MySQLSchemaDropper(compiler.SchemaDropper):
     def visit_index(self, index):
         self.append("\nDROP INDEX %s ON %s" %
-                    (self.preparer.quote(index, self._validate_identifier(index.name, False)),
+                    (self.preparer.format_index(index),
                      self.preparer.format_table(index.table)))
         self.execute()
 

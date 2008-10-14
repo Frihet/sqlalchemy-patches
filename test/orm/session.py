@@ -6,7 +6,7 @@ from sqlalchemy.orm.session import SessionExtension
 from sqlalchemy.orm.session import Session as SessionCls
 from testlib import *
 from testlib.tables import *
-from testlib import fixtures, tables, config
+from testlib import fixtures, tables
 import pickle
 import gc
 
@@ -134,36 +134,6 @@ class SessionTest(TestBase, AssertsExecutionResults):
         assert testing.db.connect().execute("select count(1) from users").scalar() == 1
         sess.close()
 
-    def test_flush_noop(self):
-        session = create_session()
-        session.uow = object()
-
-        self.assertRaises(AttributeError, session.flush)
-
-        session = create_session()
-        session.uow = object()
-
-        session.flush(objects=[])
-        session.flush(objects=set())
-        session.flush(objects=())
-        session.flush(objects=iter([]))
-    
-    def test_forwards_compat_add(self):
-        class User(object):pass
-        mapper(User, users)
-        sess = create_session()
-        u1 = User()
-        sess.add(u1)
-        assert u1 in sess
-        u2, u3 = User(), User()
-        sess.add_all([u2, u3])
-        assert u2, u3 in sess
-        sess.flush()
-        sess.expunge(u1)
-        assert u1 not in sess
-        sess.add(u1)
-        assert u1 in sess
-        
     @testing.unsupported('sqlite', 'mssql') # TEMP: test causes mssql to hang
     @engines.close_open_connections
     def test_autoflush(self):
@@ -261,13 +231,6 @@ class SessionTest(TestBase, AssertsExecutionResults):
         assert len(u.addresses) == 3
         assert newad not in u.addresses
 
-    def test_active_flag(self):
-        sess = create_session(bind=config.db, transactional=False)
-        assert not sess.is_active
-        sess.begin()
-        assert sess.is_active
-        sess.rollback()
-        assert not sess.is_active
 
     @engines.close_open_connections
     def test_external_joined_transaction(self):
@@ -904,23 +867,19 @@ class SessionTest(TestBase, AssertsExecutionResults):
                 log.append('after_flush')
             def after_flush_postexec(self, session, flush_context):
                 log.append('after_flush_postexec')
-            def after_begin(self, session, transaction, connection):
-                log.append('after_begin')
-            def after_attach(self, session, instance):
-                log.append('after_attach')
-
         sess = create_session(extension = MyExt())
         u = User()
         sess.save(u)
         sess.flush()
-        assert log == ['after_attach', 'before_flush', 'after_begin', 'after_flush', 'before_commit', 'after_commit', 'after_flush_postexec']
+
+        assert log == ['before_flush', 'after_flush', 'before_commit', 'after_commit', 'after_flush_postexec']
 
         log = []
         sess = create_session(transactional=True, extension=MyExt())
         u = User()
         sess.save(u)
         sess.flush()
-        assert log == ['after_attach', 'before_flush', 'after_begin', 'after_flush', 'after_flush_postexec']
+        assert log == ['before_flush', 'after_flush', 'after_flush_postexec']
 
         log = []
         u.user_name = 'ed'
@@ -930,11 +889,6 @@ class SessionTest(TestBase, AssertsExecutionResults):
         log = []
         sess.commit()
         assert log == ['before_commit', 'after_commit']
-        
-        log = []
-        sess = create_session(transactional=True, extension=MyExt(), bind=testing.db)
-        conn = sess.connection()
-        assert log == ['after_begin']
 
     def test_pickled_update(self):
         mapper(User, users)
@@ -1042,29 +996,14 @@ class ScopedSessionTest(ORMTest):
         self.assertEquals(SomeObject(id=1, data="hello", options=[SomeOtherObject(someid=1)]), Session.query(SomeObject).one())
         self.assertEquals(SomeObject(id=1, data="hello", options=[SomeOtherObject(someid=1)]), SomeObject.query.one())
         self.assertEquals(SomeOtherObject(someid=1), SomeOtherObject.query.filter(SomeOtherObject.someid==sso.someid).one())
-    
-    def test_forwards_compat_add(self):
-        Session = scoped_session(sessionmaker())
-        class User(object):
-            pass
-        
-        mapper(User, table)
-        u1 = User()
-        Session.add(u1)
-        assert u1 in Session()
-        
-        u2, u3 = User(), User()
-        Session.add_all([u2, u3])
-        assert u2 in Session()
-        assert u3 in Session()
-        
+
 class ScopedMapperTest(TestBase):
     def setUpAll(self):
         global metadata, table, table2
         metadata = MetaData(testing.db)
         table = Table('sometable', metadata,
             Column('id', Integer, primary_key=True),
-            Column('data', String(30), nullable=False))
+            Column('data', String(30)))
         table2 = Table('someothertable', metadata,
             Column('id', Integer, primary_key=True),
             Column('someid', None, ForeignKey('sometable.id'))
@@ -1144,36 +1083,6 @@ class ScopedMapperTest(TestBase):
         Session.mapper(MyClass, table2)
 
         assert MyClass().expunge() == "an expunge !"
-
-    def _test_autoflush_saveoninit(self, on_init, autoflush=None):
-        Session = scoped_session(
-            sessionmaker(transactional=True, autoflush=True))
-
-        class Foo(object):
-            def __init__(self, data=None):
-                if autoflush is not None:
-                    friends = Session.query(Foo).autoflush(autoflush).all()
-                else:
-                    friends = Session.query(Foo).all()
-                self.data = data
-
-        Session.mapper(Foo, table, save_on_init=on_init)
-
-        a1 = Foo('an address')
-        Session.flush()
-
-    def test_autoflush_saveoninit(self):
-        """Test save_on_init + query.autoflush()"""
-        self._test_autoflush_saveoninit(False)
-        self._test_autoflush_saveoninit(False, True)
-        self._test_autoflush_saveoninit(False, False)
-
-        self.assertRaises(exceptions.DBAPIError,
-                          self._test_autoflush_saveoninit, True)
-        self.assertRaises(exceptions.DBAPIError,
-                          self._test_autoflush_saveoninit, True, True)
-        self._test_autoflush_saveoninit(True, False)
-
 
 class ScopedMapperTest2(ORMTest):
     def define_tables(self, metadata):

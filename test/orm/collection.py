@@ -415,11 +415,8 @@ class CollectionsTest(TestBase):
                 direct.remove(item)
             control.clear()
 
+        # assume add() is available for list tests
         addall(creator())
-
-        e = creator()
-        addall(e)
-        addall(e)
 
         if hasattr(direct, 'pop'):
             direct.pop()
@@ -484,11 +481,6 @@ class CollectionsTest(TestBase):
             control |= values
             assert_eq()
 
-            values = frozenset([e, creator()])
-            obj.attr |= values
-            control |= values
-            assert_eq()
-
             try:
                 direct |= [e, creator()]
                 assert False
@@ -530,11 +522,6 @@ class CollectionsTest(TestBase):
             assert_eq()
 
             values = set([creator()])
-            obj.attr -= values
-            control -= values
-            assert_eq()
-
-            values = frozenset([creator()])
             obj.attr -= values
             control -= values
             assert_eq()
@@ -1736,24 +1723,6 @@ class CustomCollectionsTest(ORMTest):
         p2 = sess.query(Parent).get(p1.col1)
         o = list(p2.children)
         assert len(o) == 3
-
-
-class InstrumentationTest(TestBase):
-
-    def test_uncooperative_descriptor_in_sweep(self):
-        class DoNotTouch(object):
-            def __get__(self, obj, owner):
-                raise AttributeError
-
-        class Touchy(list):
-            no_touch = DoNotTouch()
-
-        assert 'no_touch' in Touchy.__dict__
-        assert not hasattr(Touchy, 'no_touch')
-        assert 'no_touch' in dir(Touchy)
-
-        instrumented = collections._instrument_class(Touchy)
-        assert True
 
 if __name__ == "__main__":
     testenv.main()

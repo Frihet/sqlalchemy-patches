@@ -270,7 +270,7 @@ class LazyLoader(AbstractRelationLoader):
         self.is_class_level = True
         self._register_attribute(self.parent.class_, callable_=self.class_level_loader)
 
-    def lazy_clause(self, instance, reverse_direction=False, alias_secondary=False):
+    def lazy_clause(self, instance, reverse_direction=False):
         if instance is None:
             return self._lazy_none_clause(reverse_direction)
             
@@ -286,10 +286,6 @@ class LazyLoader(AbstractRelationLoader):
                 # also its a deferred value; so that when used by Query, the committed value is used
                 # after an autoflush occurs
                 bindparam.value = lambda: mapper._get_committed_attr_by_column(instance, bind_to_col[bindparam.key])
-                
-        if self.secondary and alias_secondary:
-            criterion = sql_util.ClauseAdapter(self.secondary.alias()).traverse(criterion)
-            
         return visitors.traverse(criterion, clone=True, visit_bindparam=visit_bindparam)
     
     def _lazy_none_clause(self, reverse_direction=False):
@@ -355,39 +351,41 @@ class LazyLoader(AbstractRelationLoader):
 
     def __create_lazy_clause(cls, prop, reverse_direction=False):
         binds = {}
-        lookup = {}
         equated_columns = {}
 
-        if reverse_direction and not prop.secondaryjoin:
-            for l, r in prop.local_remote_pairs:
-                _list = lookup.setdefault(r, [])
-                _list.append((r, l))
-                equated_columns[l] = r
-        else:
-            for l, r in prop.local_remote_pairs:
-                _list = lookup.setdefault(l, [])
-                _list.append((l, r))
-                equated_columns[r] = l
-                
-        def col_to_bind(col):
-            if col in lookup:
-                for tobind, equated in lookup[col]:
-                    if equated in binds:
-                        return None
-                if col not in binds:
-                    binds[col] = sql.bindparam(None, None, type_=col.type)
-                return binds[col]
-            return None
-                    
+        secondaryjoin = prop.secondaryjoin
+        equated = dict(prop.local_remote_pairs)
+        
+        def should_bind(targetcol, othercol):
+            if reverse_direction and not secondaryjoin:
+                return othercol in equated
+            else:
+                return targetcol in equated
+
+        def visit_binary(binary):
+            leftcol = binary.left
+            rightcol = binary.right
+
+            equated_columns[rightcol] = leftcol
+            equated_columns[leftcol] = rightcol
+
+            if should_bind(leftcol, rightcol):
+                if leftcol not in binds:
+                    binds[leftcol] = sql.bindparam(None, None, type_=binary.right.type)
+                binary.left = binds[leftcol]
+            elif should_bind(rightcol, leftcol):
+                if rightcol not in binds:
+                    binds[rightcol] = sql.bindparam(None, None, type_=binary.left.type)
+                binary.right = binds[rightcol]
+
         lazywhere = prop.primaryjoin
         
         if not prop.secondaryjoin or not reverse_direction:
-            lazywhere = visitors.traverse(lazywhere, before_clone=col_to_bind, clone=True) 
+            lazywhere = visitors.traverse(lazywhere, clone=True, visit_binary=visit_binary)
         
         if prop.secondaryjoin is not None:
-            secondaryjoin = prop.secondaryjoin
             if reverse_direction:
-                secondaryjoin = visitors.traverse(secondaryjoin, before_clone=col_to_bind, clone=True)
+                secondaryjoin = visitors.traverse(secondaryjoin, clone=True, visit_binary=visit_binary)
             lazywhere = sql.and_(lazywhere, secondaryjoin)
     
         bind_to_col = dict([(binds[col].key, col) for col in binds])
@@ -506,28 +504,6 @@ class EagerLoader(AbstractRelationLoader):
                 if self.mapper.base_mapper in path:
                     return
 
-        if ("eager_row_processor", path) in context.attributes:
-            # if user defined eager_row_processor, that's contains_eager().
-            # don't render LEFT OUTER JOIN, generate an AliasedClauses from 
-            # the decorator (this is a hack here, cleaned up in 0.5)
-            cl = context.attributes[("eager_row_processor", path)]
-            if cl:
-                row = cl(None)
-                class ActsLikeAliasedClauses(object):
-                    def aliased_column(self, col):
-                        return row.map[col]
-                clauses = ActsLikeAliasedClauses()
-            else:
-                clauses = None
-        else:
-            clauses = self.__create_eager_join(context, path, parentclauses, parentmapper, **kwargs)
-            if not clauses:
-                return
-
-        for value in self.mapper._iterate_polymorphic_properties():
-            context.exec_with_path(self.mapper, value.key, value.setup, context, parentclauses=clauses, parentmapper=self.mapper)
-
-    def __create_eager_join(self, context, path, parentclauses, parentmapper, **kwargs):
         if parentmapper is None:
             localparent = context.mapper
         else:
@@ -572,7 +548,8 @@ class EagerLoader(AbstractRelationLoader):
         if clauses.order_by:
             context.eager_order_by += util.to_list(clauses.order_by)
         
-        return clauses
+        for value in self.mapper._iterate_polymorphic_properties():
+            context.exec_with_path(self.mapper, value.key, value.setup, context, parentclauses=clauses, parentmapper=self.mapper)
         
     def _create_row_decorator(self, selectcontext, row, path):
         """Create a *row decorating* function that will apply eager

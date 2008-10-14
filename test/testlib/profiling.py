@@ -165,13 +165,11 @@ def conditional_call_count(discriminator, categories):
 def _profile(filename, fn, *args, **kw):
     global profiler
     if not profiler:
-        profiler = 'hotshot'
-        if sys.version_info > (2, 5):
-            try:
-                import cProfile
-                profiler = 'cProfile'
-            except ImportError:
-                pass
+        try:
+            import cProfile
+            profiler = 'cProfile'
+        except ImportError:
+            profiler = 'hotshot'
 
     if profiler == 'cProfile':
         return _profile_cProfile(filename, fn, *args, **kw)

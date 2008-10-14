@@ -34,9 +34,7 @@ class ConcurrentModificationError(SQLAlchemyError):
 class CircularDependencyError(SQLAlchemyError):
     """Raised by topological sorts when a circular dependency is detected"""
 
-class IdentifierError(SQLAlchemyError):
-    """Raised when a schema name is beyond the max character limit"""
-    
+
 class FlushError(SQLAlchemyError):
     """Raised when an invalid condition is detected upon a ``flush()``."""
 
@@ -66,9 +64,7 @@ class AssertionError(SQLAlchemyError):
 
 class NoSuchColumnError(KeyError, SQLAlchemyError):
     """Raised by ``RowProxy`` when a nonexistent column is requested from a row."""
-    
-class NoReferencedTableError(InvalidRequestError):
-    """Raised by ``ForeignKey`` when the referred ``Table`` cannot be located."""
+
 
 class DisconnectionError(SQLAlchemyError):
     """Raised within ``Pool`` when a disconnect is detected on a raw DB-API connection.

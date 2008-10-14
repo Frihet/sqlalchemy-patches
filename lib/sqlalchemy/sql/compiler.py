@@ -18,7 +18,7 @@ creating database-specific compilers and schema generators, the module
 is otherwise internal to SQLAlchemy.
 """
 
-import string, re, itertools, sha
+import string, re, sha
 from sqlalchemy import schema, engine, util, exceptions, logging
 from sqlalchemy.sql import operators, functions
 from sqlalchemy.sql import expression as sql
@@ -90,8 +90,7 @@ OPERATORS =  {
     operators.as_ : 'AS',
     operators.exists : 'EXISTS',
     operators.is_ : 'IS',
-    operators.isnot : 'IS NOT',
-    operators.collate : 'COLLATE',
+    operators.isnot : 'IS NOT'
 }
 
 FUNCTIONS = {
@@ -428,8 +427,8 @@ class DefaultCompiler(engine.Compiled):
             column.table is not None and \
             not isinstance(column.table, sql.Select):
             return column.label(column.name)
-        elif not isinstance(column, (sql._UnaryExpression, sql._TextClause, sql._BindParamClause)) and (not hasattr(column, 'name') or isinstance(column, sql._Function)):
-            return column.label(column.anon_label)
+        elif not isinstance(column, (sql._UnaryExpression, sql._TextClause)) and (not hasattr(column, 'name') or isinstance(column, sql._Function)):
+            return column.anon_label
         else:
             return column
 
@@ -457,7 +456,10 @@ class DefaultCompiler(engine.Compiled):
 
         froms = select._get_display_froms(existingfroms)
 
-        correlate_froms = util.Set(itertools.chain(*([froms] + [f._get_from_objects() for f in froms])))
+        correlate_froms = util.Set()
+        for f in froms:
+            correlate_froms.add(f)
+            correlate_froms.update(f._get_from_objects())
 
         # TODO: might want to propigate existing froms for select(select(select))
         # where innermost select should correlate to outermost
@@ -719,19 +721,6 @@ class DDLBase(engine.SchemaIterator):
                 findalterables.traverse(c)
         return alterables
 
-    def _validate_identifier(self, ident, truncate):
-        if truncate:
-            if len(ident) > self.dialect.max_identifier_length:
-                counter = getattr(self, 'counter', 0)
-                self.counter = counter + 1
-                return ident[0:self.dialect.max_identifier_length - 6] + "_" + hex(self.counter)[2:]
-            else:
-                return ident
-        else:
-            self.dialect.validate_identifier(ident)
-            return ident
-
-
 class SchemaGenerator(DDLBase):
     def __init__(self, dialect, connection, checkfirst=False, tables=None, **kwargs):
         super(SchemaGenerator, self).__init__(connection, **kwargs)
@@ -743,14 +732,8 @@ class SchemaGenerator(DDLBase):
     def get_column_specification(self, column, first_pk=False):
         raise NotImplementedError()
 
-    def _can_create(self, table):
-        self.dialect.validate_identifier(table.name)
-        if table.schema:
-            self.dialect.validate_identifier(table.schema)
-        return not self.checkfirst or not self.dialect.has_table(self.connection, table.name, schema=table.schema)
-
     def visit_metadata(self, metadata):
-        collection = [t for t in metadata.table_iterator(reverse=False, tables=self.tables) if self._can_create(t)]
+        collection = [t for t in metadata.table_iterator(reverse=False, tables=self.tables) if (not self.checkfirst or not self.dialect.has_table(self.connection, t.name, schema=t.schema))]
         for table in collection:
             self.traverse_single(table)
         if self.dialect.supports_alter:
@@ -891,7 +874,7 @@ class SchemaGenerator(DDLBase):
         if index.unique:
             self.append("UNIQUE ")
         self.append("INDEX %s ON %s (%s)" \
-                    % (preparer.quote(index, self._validate_identifier(index.name, True)),
+                    % (preparer.format_index(index),
                        preparer.format_table(index.table),
                        string.join([preparer.format_column(c) for c in index.columns], ', ')))
         self.execute()
@@ -906,21 +889,15 @@ class SchemaDropper(DDLBase):
         self.dialect = dialect
 
     def visit_metadata(self, metadata):
-        collection = [t for t in metadata.table_iterator(reverse=True, tables=self.tables) if self._can_drop(t)]
+        collection = [t for t in metadata.table_iterator(reverse=True, tables=self.tables) if (not self.checkfirst or  self.dialect.has_table(self.connection, t.name, schema=t.schema))]
         if self.dialect.supports_alter:
             for alterable in self.find_alterables(collection):
                 self.drop_foreignkey(alterable)
         for table in collection:
             self.traverse_single(table)
 
-    def _can_drop(self, table):
-        self.dialect.validate_identifier(table.name)
-        if table.schema:
-            self.dialect.validate_identifier(table.schema)
-        return not self.checkfirst or self.dialect.has_table(self.connection, table.name, schema=table.schema)
-
     def visit_index(self, index):
-        self.append("\nDROP INDEX " + self.preparer.quote(index, self._validate_identifier(index.name, False)))
+        self.append("\nDROP INDEX " + self.preparer.format_index(index))
         self.execute()
 
     def drop_foreignkey(self, constraint):
@@ -994,19 +971,6 @@ class IdentifierPreparer(object):
 
         return truncname
 
-    def process_anon(self, match):
-        (ident, derived) = match.group(1,2)
-
-        key = ('anonymous', ident)
-        if key in self.generated_ids:
-            return self.generated_ids[key]
-        else:
-            anonymous_counter = self.generated_ids.get(('anon_counter', derived), 1)
-            newname = derived + "_" + str(anonymous_counter)
-            self.generated_ids[('anon_counter', derived)] = anonymous_counter + 1
-            self.generated_ids[key] = newname
-            return newname
-
     def _truncate_identifier(self, ident_class, name, anonname):
         if (ident_class, name) in self.generated_ids:
             return self.generated_ids[(ident_class, name)]
@@ -1038,6 +1002,18 @@ class IdentifierPreparer(object):
         self.generated_ids[(ident_class, name)] = truncname
 
         return truncname
+
+    def process_anon(self, match):
+        (ident, derived) = match.group(1,2)
+        key = ('anonymous', ident)
+        if key in self.generated_ids:
+            return self.generated_ids[key]
+        else:
+            anonymous_counter = self.generated_ids.get(('anon_counter', derived), 1)
+            newname = derived + "_" + str(anonymous_counter)
+            self.generated_ids[('anon_counter', derived)] = anonymous_counter + 1
+            self.generated_ids[key] = newname
+            return newname
 
     def _escape_identifier(self, value):
         """Escape an identifier.

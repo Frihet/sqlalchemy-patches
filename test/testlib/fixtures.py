@@ -4,10 +4,6 @@ from sqlalchemy import *
 from sqlalchemy import util
 from testlib import *
 
-__all__ = ['keywords', 'addresses', 'Base', 'Keyword', 'FixtureTest', 'Dingaling', 'item_keywords', 
-            'dingalings', 'User', 'items', 'Fixtures', 'orders', 'install_fixture_data', 'Address', 'users', 
-            'order_items', 'Item', 'Order', 'fixtures']
-            
 _recursion_stack = util.Set()
 class Base(object):
     def __init__(self, **kwargs):
@@ -84,55 +80,43 @@ metadata = MetaData()
 
 users = Table('users', metadata,
     Column('id', Integer, primary_key=True),
-    Column('name', String(30), nullable=False),
-    test_needs_acid=True,
-    )
+    Column('name', String(30), nullable=False))
 
 orders = Table('orders', metadata,
     Column('id', Integer, primary_key=True),
     Column('user_id', None, ForeignKey('users.id')),
     Column('address_id', None, ForeignKey('addresses.id')),
     Column('description', String(30)),
-    Column('isopen', Integer),
-    test_needs_acid=True,
+    Column('isopen', Integer)
     )
 
 addresses = Table('addresses', metadata,
     Column('id', Integer, primary_key=True),
     Column('user_id', None, ForeignKey('users.id')),
-    Column('email_address', String(50), nullable=False),
-    test_needs_acid=True,
-    )
+    Column('email_address', String(50), nullable=False))
 
 dingalings = Table("dingalings", metadata,
     Column('id', Integer, primary_key=True),
     Column('address_id', None, ForeignKey('addresses.id')),
-    Column('data', String(30)),
-    test_needs_acid=True,
+    Column('data', String(30))
     )
 
 items = Table('items', metadata,
     Column('id', Integer, primary_key=True),
-    Column('description', String(30), nullable=False),
-    test_needs_acid=True,
+    Column('description', String(30), nullable=False)
     )
 
 order_items = Table('order_items', metadata,
     Column('item_id', None, ForeignKey('items.id')),
-    Column('order_id', None, ForeignKey('orders.id')),
-    test_needs_acid=True,
-    )
+    Column('order_id', None, ForeignKey('orders.id')))
 
 item_keywords = Table('item_keywords', metadata,
     Column('item_id', None, ForeignKey('items.id')),
-    Column('keyword_id', None, ForeignKey('keywords.id')),
-    test_needs_acid=True,
-    )
+    Column('keyword_id', None, ForeignKey('keywords.id')))
 
 keywords = Table('keywords', metadata,
     Column('id', Integer, primary_key=True),
-    Column('name', String(30), nullable=False),
-    test_needs_acid=True,
+    Column('name', String(30), nullable=False)
     )
 
 def install_fixture_data():

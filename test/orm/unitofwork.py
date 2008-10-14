@@ -524,9 +524,8 @@ class ClauseAttributesTest(ORMTest):
         assert u.counter == 1
         u.counter = User.counter + 1
         sess.flush()
-
         def go():
-            assert (u.counter == 2) is True  # ensure its not a ClauseElement
+            assert u.counter == 2
         self.assert_sql_count(testing.db, go, 1)
 
     def test_multi_update(self):
@@ -543,7 +542,7 @@ class ClauseAttributesTest(ORMTest):
         sess.flush()
         def go():
             assert u.name == 'test2'
-            assert (u.counter == 2) is True
+            assert u.counter == 2
         self.assert_sql_count(testing.db, go, 1)
 
         sess.clear()
@@ -560,7 +559,7 @@ class ClauseAttributesTest(ORMTest):
         sess = Session()
         sess.save(u)
         sess.flush()
-        assert (u.counter == 5) is True
+        assert u.counter == 5
 
 
 class PassiveDeletesTest(ORMTest):

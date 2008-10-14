@@ -17,7 +17,7 @@ import re, random
 from sqlalchemy import types as sqltypes
 from sqlalchemy.engine import base
 from sqlalchemy.sql import compiler, expression
-from sqlalchemy import exceptions
+
 
 AUTOCOMMIT_REGEXP = re.compile(r'\s*(?:UPDATE|INSERT|CREATE|DELETE|DROP|ALTER)',
                                re.I | re.UNICODE)
@@ -117,9 +117,8 @@ class DefaultDialect(base.Dialect):
     preexecute_pk_sequences = False
     supports_pk_autoincrement = True
     dbapi_type_map = {}
-    default_paramstyle = 'named'
 
-    def __init__(self, convert_unicode=False, assert_unicode=False, encoding='utf-8', paramstyle=None, dbapi=None, **kwargs):
+    def __init__(self, convert_unicode=False, assert_unicode=False, encoding='utf-8', default_paramstyle='named', paramstyle=None, dbapi=None, **kwargs):
         self.convert_unicode = convert_unicode
         self.assert_unicode = assert_unicode
         self.encoding = encoding
@@ -131,7 +130,7 @@ class DefaultDialect(base.Dialect):
         elif self.dbapi is not None:
             self.paramstyle = self.dbapi.paramstyle
         else:
-            self.paramstyle = self.default_paramstyle
+            self.paramstyle = default_paramstyle
         self.positional = self.paramstyle in ('qmark', 'format', 'numeric')
         self.identifier_preparer = self.preparer(self)
 
@@ -159,10 +158,7 @@ class DefaultDialect(base.Dialect):
             typeobj = typeobj()
         return typeobj
 
-    def validate_identifier(self, ident):
-        if len(ident) > self.max_identifier_length:
-            raise exceptions.IdentifierError("Identifier '%s' exceeds maximum length of %d characters" % (ident, self.max_identifier_length))
-        
+
     def oid_column_name(self, column):
         return None
 
@@ -478,4 +474,3 @@ class DefaultExecutionContext(base.ExecutionContext):
                 self._last_updated_params = compiled_parameters
 
             self.postfetch_cols = self.compiled.postfetch
-            self.prefetch_cols = self.compiled.prefetch

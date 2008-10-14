@@ -115,7 +115,7 @@ class MSDateTime(sqltypes.DateTime):
 
 class MSSmallDate(sqltypes.Date):
     def __init__(self, *a, **kw):
-        super(MSSmallDate, self).__init__(False)
+        super(MSDate, self).__init__(False)
 
     def get_col_spec(self):
         return "SMALLDATETIME"
@@ -345,6 +345,7 @@ class MSSQLExecutionContext(default.DefaultExecutionContext):
                     self.cursor.execute("SELECT @@identity AS lastrowid")
                 row = self.cursor.fetchone()
                 self._last_inserted_ids = [int(row[0])] + self._last_inserted_ids[1:]
+                # print "LAST ROW ID", self._last_inserted_ids
         super(MSSQLExecutionContext, self).post_exec()
 
     _ms_is_select = re.compile(r'\s*(?:SELECT|sp_columns|EXEC)',
@@ -791,22 +792,7 @@ class MSSQLDialect_pyodbc(MSSQLDialect):
             connectors.append("UID=%s" % user)
             connectors.append("PWD=%s" % keys.get("password", ""))
         else:
-            connectors.append("TrustedConnection=Yes")
-
-        # if set to 'Yes', the ODBC layer will try to automagically convert 
-        # textual data from your database encoding to your client encoding 
-        # This should obviously be set to 'No' if you query a cp1253 encoded 
-        # database from a latin1 client... 
-        if 'odbc_autotranslate' in keys: 
-            connectors.append("AutoTranslate=%s" % keys.pop("odbc_autotranslate"))
-
-        # Allow specification of partial ODBC connect string
-        if 'odbc_options' in keys: 
-            odbc_options=keys.pop('odbc_options')
-            if odbc_options[0]=="'" and odbc_options[-1]=="'":
-                odbc_options=odbc_options[1:-1]
-            connectors.append(odbc_options)
-        
+            connectors.append ("TrustedConnection=Yes")
         return [[";".join (connectors)], {}]
 
     def is_disconnect(self, e):
@@ -1030,7 +1016,7 @@ class MSSQLSchemaDropper(compiler.SchemaDropper):
     def visit_index(self, index):
         self.append("\nDROP INDEX %s.%s" % (
             self.preparer.quote_identifier(index.table.name),
-            self.preparer.quote(index, self._validate_identifier(index.name, False))
+            self.preparer.quote_identifier(index.name)
             ))
         self.execute()
 

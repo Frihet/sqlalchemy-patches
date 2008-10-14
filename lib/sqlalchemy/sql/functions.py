@@ -18,6 +18,7 @@ class GenericFunction(_Function):
 
     def __init__(self, type_=None, group=True, args=(), **kwargs):
         self.packagenames = []
+        self.oid_column = None
         self.name = self.__class__.__name__
         self._bind = kwargs.get('bind', None)
         if group:

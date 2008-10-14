@@ -32,10 +32,6 @@ class PGInet(sqltypes.TypeEngine):
     def get_col_spec(self):
         return "INET"
 
-class PGCidr(sqltypes.TypeEngine):
-    def get_col_spec(self):
-        return "CIDR"
-
 class PGMacAddr(sqltypes.TypeEngine):
     def get_col_spec(self):
         return "MACADDR"
@@ -204,7 +200,6 @@ ischema_names = {
     'float' : PGFloat,
     'real' : PGFloat,
     'inet': PGInet,
-    'cidr': PGCidr,
     'macaddr': PGMacAddr,
     'double precision' : PGFloat,
     'timestamp' : PGDateTime,
@@ -277,10 +272,7 @@ class PGExecutionContext(default.DefaultExecutionContext):
             self.dialect.server_side_cursors and \
             ((self.compiled and isinstance(self.compiled.statement, expression.Selectable)) \
             or \
-            (
-                (not self.compiled or isinstance(self.compiled.statement, expression._TextClause)) 
-                and self.statement and SERVER_SIDE_CURSOR_RE.match(self.statement))
-            )
+            (not self.compiled and self.statement and SERVER_SIDE_CURSOR_RE.match(self.statement)))
 
         if self.__is_server_side:
             # use server-side cursors:
@@ -317,12 +309,12 @@ class PGDialect(default.DefaultDialect):
     supports_sane_multi_rowcount = False
     preexecute_pk_sequences = True
     supports_pk_autoincrement = False
-    default_paramstyle = 'pyformat'
 
     def __init__(self, use_oids=False, server_side_cursors=False, **kwargs):
-        default.DefaultDialect.__init__(self, **kwargs)
+        default.DefaultDialect.__init__(self, default_paramstyle='pyformat', **kwargs)
         self.use_oids = use_oids
         self.server_side_cursors = server_side_cursors
+        self.paramstyle = 'pyformat'
 
     def dbapi(cls):
         import psycopg2 as psycopg
@@ -752,7 +744,7 @@ class PGSchemaGenerator(compiler.SchemaGenerator):
         if index.unique:
             self.append("UNIQUE ")
         self.append("INDEX %s ON %s (%s)" \
-                    % (preparer.quote(index, self._validate_identifier(index.name, True)),
+                    % (preparer.format_index(index),
                        preparer.format_table(index.table),
                        string.join([preparer.format_column(c) for c in index.columns], ', ')))
         whereclause = index.kwargs.get('postgres_where', None)

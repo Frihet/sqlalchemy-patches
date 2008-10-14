@@ -3,8 +3,6 @@ from sqlalchemy import *
 from sqlalchemy.sql import table, column
 from sqlalchemy.databases import oracle
 from testlib import *
-from testlib.engines import testing_engine
-import os
 
 
 class OutParamTest(TestBase, AssertsExecutionResults):
@@ -115,8 +113,8 @@ class CompileTest(TestBase, AssertsCompiledSQL):
         self.assert_compile(query,
             "SELECT mytable.myid, mytable.name, mytable.description, myothertable.otherid, myothertable.othername \
 FROM mytable, myothertable WHERE \
-(mytable.name = :name_1 OR mytable.myid = :myid_1 OR \
-myothertable.othername != :othername_1 OR EXISTS (select yay from foo where boo = lar)) \
+(mytable.name = :mytable_name_1 OR mytable.myid = :mytable_myid_1 OR \
+myothertable.othername != :myothertable_othername_1 OR EXISTS (select yay from foo where boo = lar)) \
 AND mytable.myid = myothertable.otherid(+)",
             dialect=oracle.OracleDialect(use_ansi = False))
 
@@ -155,10 +153,10 @@ WHERE ora_rn>5 AND ora_rn<=15", dialect=oracle.dialect(use_ansi=False))
             order_by(addresses.oid_column, address_types.oid_column)
         self.assert_compile(s, "SELECT address_types_1.id, address_types_1.name, addresses.id, addresses.user_id, "
             "addresses.address_type_id, addresses.email_address FROM addresses LEFT OUTER JOIN address_types address_types_1 "
-            "ON addresses.address_type_id = address_types_1.id WHERE addresses.user_id = :user_id_1 ORDER BY addresses.rowid, "
+            "ON addresses.address_type_id = address_types_1.id WHERE addresses.user_id = :addresses_user_id_1 ORDER BY addresses.rowid, "
             "address_types.rowid")
 
-class MultiSchemaTest(TestBase, AssertsCompiledSQL):
+class SchemaReflectionTest(TestBase, AssertsCompiledSQL):
     """instructions:
 
        1. create a user 'ed' in the oracle database.
@@ -175,44 +173,6 @@ class MultiSchemaTest(TestBase, AssertsCompiledSQL):
     """
 
     __only_on__ = 'oracle'
-
-    def test_create_same_names_explicit_schema(self):
-        schema = testing.db.dialect.get_default_schema_name(testing.db.connect())
-        meta = MetaData(testing.db)
-        parent = Table('parent', meta, 
-            Column('pid', Integer, primary_key=True),
-            schema=schema
-        )
-        child = Table('child', meta, 
-            Column('cid', Integer, primary_key=True),
-            Column('pid', Integer, ForeignKey('scott.parent.pid')),
-            schema=schema
-        )
-        meta.create_all()
-        try:
-            parent.insert().execute({'pid':1})
-            child.insert().execute({'cid':1, 'pid':1})
-            self.assertEquals(child.select().execute().fetchall(), [(1, 1)])
-        finally:
-            meta.drop_all()
-
-    def test_create_same_names_implicit_schema(self):
-        meta = MetaData(testing.db)
-        parent = Table('parent', meta, 
-            Column('pid', Integer, primary_key=True),
-        )
-        child = Table('child', meta, 
-            Column('cid', Integer, primary_key=True),
-            Column('pid', Integer, ForeignKey('parent.pid')),
-        )
-        meta.create_all()
-        try:
-            parent.insert().execute({'pid':1})
-            child.insert().execute({'cid':1, 'pid':1})
-            self.assertEquals(child.select().execute().fetchall(), [(1, 1)])
-        finally:
-            meta.drop_all()
-
 
     def test_reflect_alt_owner_explicit(self):
         meta = MetaData(testing.db)
@@ -305,39 +265,6 @@ class TypesTest(TestBase, AssertsCompiledSQL):
             assert t.select().execute().fetchall() == [(1, 'foobar')]
         finally:
             testing.db.execute("DROP TABLE Z_TEST")
-
-class BufferedColumnTest(TestBase, AssertsCompiledSQL):
-    __only_on__ = 'oracle'
-
-    def setUpAll(self):
-        global binary_table, stream, meta
-        meta = MetaData(testing.db)
-        binary_table = Table('binary_table', meta, 
-           Column('id', Integer, primary_key=True),
-           Column('data', Binary)
-        )
-        meta.create_all()
-        stream = os.path.join(os.path.dirname(testenv.__file__), 'binary_data_one.dat')
-        stream = file(stream).read(12000)
-
-        for i in range(1, 11):
-            binary_table.insert().execute(id=i, data=stream)
-
-    def tearDownAll(self):
-        meta.drop_all()
-
-    def test_fetch(self):
-        self.assertEquals(
-            binary_table.select().execute().fetchall() ,
-            [(i, stream) for i in range(1, 11)], 
-        )
-
-    def test_fetch_single_arraysize(self):
-        eng = testing_engine(options={'arraysize':1})
-        self.assertEquals(
-            eng.execute(binary_table.select()).fetchall(),
-            [(i, stream) for i in range(1, 11)], 
-        )
 
 class SequenceTest(TestBase, AssertsCompiledSQL):
     def test_basic(self):

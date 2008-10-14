@@ -668,7 +668,7 @@ class SchemaTest(TestBase):
 
     @testing.unsupported('sqlite', 'firebird')
     # fixme: revisit these below.
-    @testing.fails_on('mssql', 'sybase', 'access')
+    @testing.fails_on('oracle', 'mssql', 'sybase', 'access')
     def test_explicit_default_schema(self):
         engine = testing.db
 
@@ -677,7 +677,7 @@ class SchemaTest(TestBase):
         elif testing.against('postgres'):
             schema = 'public'
         else:
-            schema = engine.dialect.get_default_schema_name(engine.connect())
+            schema = engine.dialect.get_default_schema_name(engine)
 
         metadata = MetaData(engine)
         table1 = Table('table1', metadata,

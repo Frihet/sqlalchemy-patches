@@ -127,16 +127,6 @@ class SessionExtension(object):
         state.  An actual commit() may or may not have occured, depending on whether or not
         the flush started its own transaction or participated in a larger transaction.
         """
-    
-    def after_begin(self, session, transaction, connection):
-        """Execute after a transaction is begun on a connection
-        
-        `transaction` is the SessionTransaction. This method is called after an
-        engine level transaction is begun on a connection.
-        """
-
-    def after_attach(self, session, instance):
-        """Execute after an instance is attached to a session."""
 
 class SessionTransaction(object):
     """Represents a Session-level Transaction.
@@ -224,8 +214,6 @@ class SessionTransaction(object):
             transaction = conn.begin()
         
         self._connections[conn] = self._connections[conn.engine] = (conn, transaction, conn is not bind)
-        if self.session.extension is not None:
-            self.session.extension.after_begin(self.session, self, conn)
         return conn
 
     def prepare(self):
@@ -278,7 +266,7 @@ class SessionTransaction(object):
             for subtransaction in self.session.transaction._iterate_parents(upto=self):
                 subtransaction.close()
         
-        if self.is_active or self._prepared:
+        if self.is_active:
             for transaction in self._iterate_parents():
                 if transaction._parent is None or transaction.nested:
                     transaction._rollback_impl()
@@ -286,7 +274,6 @@ class SessionTransaction(object):
                     break
                 else:
                     transaction._deactivate()
-
         self.close()
         return self._parent
     
@@ -575,7 +562,7 @@ class Session(object):
 
         self.transaction.prepare()
 
-    def connection(self, mapper=None, clause=None, instance=None):
+    def connection(self, mapper=None, **kwargs):
         """Return a ``Connection`` corresponding to this session's
         transactional context, if any.
 
@@ -593,7 +580,7 @@ class Session(object):
         subclass takes a different get_bind() argument signature.
         """
 
-        return self.__connection(self.get_bind(mapper, clause, instance))
+        return self.__connection(self.get_bind(mapper, **kwargs))
 
     def __connection(self, engine, **kwargs):
         if self.transaction is not None:
@@ -601,38 +588,28 @@ class Session(object):
         else:
             return engine.contextual_connect(**kwargs)
 
-    def execute(self, clause, params=None, mapper=None, instance=None):
-        """Execute the given clause, using the current transaction (if any).
+    def execute(self, clause, params=None, mapper=None, **kwargs):
+        """Using the given mapper to identify the appropriate ``Engine``
+        or ``Connection`` to be used for statement execution, execute the
+        given ``ClauseElement`` using the provided parameter dictionary.
 
-        Returns a ``ResultProxy`` corresponding to the execution's results.
-        
-        clause
-            a ClauseElement (i.e. select(), text(), etc.) or 
-            string SQL statement to be executed
-            
-        params 
-            a dictionary of bind parameters.
-        
-        mapper
-            a mapped class or Mapper instance which may be needed
-            in order to locate the proper bind.  This is typically
-            if the Session is not directly bound to a single engine.
-            
-        instance
-            used by some Query operations to further identify
-            the proper bind, in the case of ShardedSession.
-            
+        Return a ``ResultProxy`` corresponding to the execution's results.
+
+        If this method allocates a new ``Connection`` for the operation,
+        then the ``ResultProxy`` 's ``close()`` method will release the
+        resources of the underlying ``Connection``.
         """
-        engine = self.get_bind(mapper, clause=clause, instance=instance)
+
+        engine = self.get_bind(mapper, clause=clause, **kwargs)
 
         return self.__connection(engine, close_with_result=True).execute(clause, params or {})
 
-    def scalar(self, clause, params=None, mapper=None, instance=None):
+    def scalar(self, clause, params=None, mapper=None, **kwargs):
         """Like execute() but return a scalar result."""
 
-        engine = self.get_bind(mapper, clause=clause, instance=instance)
+        engine = self.get_bind(mapper, clause=clause)
 
-        return self.__connection(engine, close_with_result=True).scalar(clause, params or {})
+        return self.__connection(engine, close_with_result=True).scalar(clause, params or {}, **kwargs)
 
     def close(self):
         """Close this Session.
@@ -697,24 +674,23 @@ class Session(object):
 
         self.__binds[table] = bind
 
-    def get_bind(self, mapper, clause=None, instance=None):
+    def get_bind(self, mapper, clause=None, **kwargs):
         """Return an engine corresponding to the given arguments.
 
         mapper
-            mapper relative to the desired operation.
+            mapper relative to the desired operation
 
         clause
             a ClauseElement which is to be executed.  if
             mapper is not present, this may be used to locate
             Table objects, which are then associated with mappers
             which have associated binds.
-        
-        instance
-            an ORM mapped instance which may be used to further
-            locate the correct bind.  This is currently used by 
-            the ShardedSession subclass.
-            
+
+        \**kwargs
+            Subclasses (i.e. ShardedSession) may add additional arguments
+            to get_bind() which are passed through here.
         """
+
         if mapper is None and clause is None:
             if self.bind is not None:
                 return self.bind
@@ -753,8 +729,8 @@ class Session(object):
     def query(self, mapper_or_class, *addtl_entities, **kwargs):
         """Return a new ``Query`` object corresponding to this ``Session`` and
         the mapper, or the classes' primary mapper.
-
         """
+
         entity_name = kwargs.pop('entity_name', None)
 
         if isinstance(mapper_or_class, type):
@@ -774,27 +750,25 @@ class Session(object):
         """Flush all the object modifications present in this session
         to the database.
 
-        `objects` is a collection or iterator of objects specifically to be
+        `objects` is a list or tuple of objects specifically to be
         flushed; if ``None``, all new and modified objects are flushed.
-
         """
-        if objects is not None:
-            try:
-                if not len(objects):
-                    return
-            except TypeError:
-                objects = list(objects)
-                if not objects:
-                    return
+
         self.uow.flush(self, objects)
 
     def get(self, class_, ident, **kwargs):
         """Return an instance of the object based on the given
         identifier, or ``None`` if not found.
-        
-        DEPRECATED.  use session.query(class_).get(ident)
 
+        The `ident` argument is a scalar or tuple of primary key
+        column values in the order of the table def's primary key
+        columns.
+
+        The `entity_name` keyword argument may also be specified which
+        further qualifies the underlying Mapper used to perform the
+        query.
         """
+
         entity_name = kwargs.pop('entity_name', None)
         return self.query(class_, entity_name=entity_name).get(ident, **kwargs)
 
@@ -802,9 +776,17 @@ class Session(object):
         """Return an instance of the object based on the given
         identifier.
 
-        DEPRECATED.  use session.query(class_).populate_existing().get(ident).
+        If not found, raises an exception.  The method will **remove
+        all pending changes** to the object already existing in the
+        ``Session``.  The `ident` argument is a scalar or tuple of primary
+        key columns in the order of the table def's primary key
+        columns.
 
+        The `entity_name` keyword argument may also be specified which
+        further qualifies the underlying ``Mapper`` used to perform the
+        query.
         """
+
         entity_name = kwargs.pop('entity_name', None)
         return self.query(class_, entity_name=entity_name).load(ident, **kwargs)
 
@@ -930,23 +912,6 @@ class Session(object):
 
         self._save_or_update_impl(instance, entity_name=entity_name)
         self._cascade_save_or_update(instance)
-
-    def add(self, instance, entity_name=None):
-        """Add the given instance into this ``Session``.
-
-        This provides forwards compatibility with 0.5.
-
-        """
-        self.save_or_update(instance, entity_name)
-
-    def add_all(self, instances):
-        """Add the given collection of instances to this ``Session``.
-        
-        This provides forwards compatibility with 0.5.
-        """
-
-        for instance in instances:
-            self.add(instance)
 
     def _cascade_save_or_update(self, instance):
         for obj, mapper in _cascade_iterator('save-update', instance, halt_on=lambda c:c in self):
@@ -1144,9 +1109,6 @@ class Session(object):
                 self.identity_map[key] = instance
             instance._sa_session_id = self.hash_key
 
-            if self.extension is not None:
-                self.extension.after_attach(self, instance)
-
     def _unattach(self, instance):
         if instance._sa_session_id == self.hash_key:
             del instance._sa_session_id
@@ -1197,13 +1159,7 @@ class Session(object):
             if added or deleted:
                 return True
         return False
-    
-    def is_active(self):
-        """return True if this Session has an active transaction."""
-        
-        return self.transaction and self.transaction.is_active
-    is_active = property(is_active)
-    
+
     def dirty(self):
         """Return a ``Set`` of all instances marked as 'dirty' within this ``Session``.
 

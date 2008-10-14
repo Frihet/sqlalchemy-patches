@@ -20,15 +20,19 @@ class SelectableNoFromsTest(ORMTest):
     def test_no_tables(self):
         class Subset(object):
             pass
-        selectable = select(["x", "y", "z"])
-        self.assertRaisesMessage(exceptions.InvalidRequestError, "Could not find any Table objects", mapper, Subset, selectable)
+        selectable = select(["x", "y", "z"]).alias('foo')
+        try:
+            mapper(Subset, selectable)
+            compile_mappers()
+            assert False
+        except exceptions.InvalidRequestError, e:
+            assert str(e) == "Could not find any Table objects in mapped table 'SELECT x, y, z'", str(e)
 
-    @testing.emits_warning('.*creating an Alias.*')
     def test_basic(self):
         class Subset(Base):
             pass
 
-        subset_select = select([common_table.c.id, common_table.c.data])
+        subset_select = select([common_table.c.id, common_table.c.data]).alias('subset')
         subset_mapper = mapper(Subset, subset_select)
 
         sess = create_session(bind=testing.db)
@@ -38,14 +42,8 @@ class SelectableNoFromsTest(ORMTest):
         sess.flush()
         sess.clear()
 
-        self.assertEquals(sess.query(Subset).all(), [Subset(data=1)])
-        self.assertEquals(sess.query(Subset).filter(Subset.data==1).one(), Subset(data=1))
-        self.assertEquals(sess.query(Subset).filter(Subset.data!=1).first(), None)
-        
-        subset_select = class_mapper(Subset).mapped_table
-        self.assertEquals(sess.query(Subset).filter(subset_select.c.data==1).one(), Subset(data=1))
+        assert [Subset(data=1)] == sess.query(Subset).all()
 
-        
     # TODO: more tests mapping to selects
 
 if __name__ == '__main__':

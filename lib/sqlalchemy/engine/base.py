@@ -1481,12 +1481,13 @@ class ResultProxy(object):
                 rec = props[key]
             except KeyError:
                 # fallback for targeting a ColumnElement to a textual expression
-                # this is a rare use case which only occurs when matching text()
-                # constructs to ColumnElements
+                # it would be nice to get rid of this but we make use of it in the case where
+                # you say something like query.options(contains_alias('fooalias')) - the matching
+                # is done on strings
                 if isinstance(key, expression.ColumnElement):
-                    if key._label and key._label.lower() in props:
+                    if key._label.lower() in props:
                         return props[key._label.lower()]
-                    elif hasattr(key, 'name') and key.name.lower() in props:
+                    elif key.name.lower() in props:
                         return props[key.name.lower()]
                 raise exceptions.NoSuchColumnError("Could not locate column in row for column '%s'" % (str(key)))
 
@@ -1573,10 +1574,7 @@ class ResultProxy(object):
         See ExecutionContext for details.
         """
         return self.context.postfetch_cols
-    
-    def prefetch_cols(self):
-        return self.context.prefetch_cols
-        
+
     def supports_sane_rowcount(self):
         """Return ``supports_sane_rowcount`` from the dialect.
 

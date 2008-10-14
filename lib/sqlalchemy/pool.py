@@ -20,7 +20,7 @@ import weakref, time
 
 from sqlalchemy import exceptions, logging
 from sqlalchemy import queue as Queue
-from sqlalchemy.util import thread, threading, pickle, as_interface
+from sqlalchemy.util import thread, threading, pickle
 
 proxies = {}
 
@@ -106,28 +106,21 @@ class Pool(object):
       newly opened connection. Defaults to -1.
 
     listeners
-      A list of ``PoolListener``-like objects or dictionaries of callables
-      that receive events when DB-API connections are created, checked out and
-      checked in to the pool.
-
-    reset_on_return
-      Defaults to True.  Reset the database state of connections returned to
-      the pool.  This is typically a ROLLBACK to release locks and transaction
-      resources.  Disable at your own peril.
-
+      A list of ``PoolListener``-like objects that receive events when
+      DB-API connections are created, checked out and checked in to
+      the pool.
     """
+
     def __init__(self, creator, recycle=-1, echo=None, use_threadlocal=True,
-                 reset_on_return=True, listeners=None):
+                 listeners=None):
         self.logger = logging.instance_logger(self, echoflag=echo)
-        # the WeakValueDictionary works more nicely than a regular dict of
-        # weakrefs.  the latter can pile up dead reference objects which don't
-        # get cleaned out.  WVD adds from 1-6 method calls to a checkout
-        # operation.
+        # the WeakValueDictionary works more nicely than a regular dict
+        # of weakrefs.  the latter can pile up dead reference objects which don't
+        # get cleaned out.  WVD adds from 1-6 method calls to a checkout operation.
         self._threadconns = weakref.WeakValueDictionary()
         self._creator = creator
         self._recycle = recycle
         self._use_threadlocal = use_threadlocal
-        self._reset_on_return = reset_on_return
         self.echo = echo
         self.listeners = []
         self._on_connect = []
@@ -189,16 +182,7 @@ class Pool(object):
         raise NotImplementedError()
 
     def add_listener(self, listener):
-        """Add a ``PoolListener``-like object to this pool.
-
-        ``listener`` may be an object that implements some or all of
-        PoolListener, or a dictionary of callables containing implementations
-        of some or all of the named methods in PoolListener.
-
-        """
-
-        listener = as_interface(
-            listener, methods=('connect', 'checkout', 'checkin'))
+        """Add a ``PoolListener``-like object to this pool."""
 
         self.listeners.append(listener)
         if hasattr(listener, 'connect'):
@@ -294,8 +278,7 @@ def _finalize_fairy(connection, connection_record, pool, ref=None):
         return
     if connection is not None:
         try:
-            if pool._reset_on_return:
-                connection.rollback()
+            connection.rollback()
             # Immediately close detached instances
             if connection_record is None:
                 connection.close()
