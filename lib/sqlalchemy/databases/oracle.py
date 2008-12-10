@@ -669,12 +669,6 @@ class OracleCompiler(compiler.DefaultCompiler):
         else:
             return value_name
 
-    def visit_join(self, join, **kwargs):
-        if self.dialect.use_ansi:
-            return compiler.DefaultCompiler.visit_join(self, join, **kwargs)
-        else:
-            return self.process(join.left, asfrom=True) + ", " + self.process(join.right, asfrom=True)
-
     def _get_nonansi_join_whereclause(self, froms):
         clauses = []
 
@@ -895,8 +889,12 @@ class OracleCompiler(compiler.DefaultCompiler):
         kwargs['iswrapper'] = getattr(select, '_is_wrapper', False)
         return compiler.DefaultCompiler.visit_select(self, select, **kwargs)
 
-    def visit_join(self, join, asfrom=False, **kwargs):
-        return super(OracleCompiler, self).visit_join(join, asfrom=False, **kwargs) + " = 1"
+    def visit_join(self, join, **kwargs):
+        if self.dialect.use_ansi:
+            return (self.process(join.left, asfrom=True) + (join.isouter and " LEFT OUTER JOIN " or " JOIN ") + \
+                    self.process(join.right, asfrom=True) + " ON " + self.process(join.onclause, _oracle_in_where = True))
+        else:
+            return self.process(join.left, asfrom=True) + ", " + self.process(join.right, asfrom=True)
 
     def limit_clause(self, select):
         return ""
