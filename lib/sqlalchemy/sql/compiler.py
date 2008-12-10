@@ -966,6 +966,7 @@ class IdentifierPreparer(object):
             truncname = self._truncate_identifier(ident_class, name, anonname)
         else:
             truncname = anonname
+            self.generated_ids[(ident_class, name)] = truncname
 
         self.logger.info("Truncate: %s: %s -> %s" % (ident_class, name, truncname))
 
